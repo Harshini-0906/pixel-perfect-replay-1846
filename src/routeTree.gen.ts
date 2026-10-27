@@ -10,33 +10,126 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DemoApprovalflowRouteImport } from './routes/demo.approvalflow'
+import { Route as DemoLoginRouteImport } from './routes/demo.login'
+import { Route as DemoApprovalflowAdminRouteImport } from './routes/demo.approvalflow.admin'
+import { Route as DemoApprovalflowApplicationsRouteImport } from './routes/demo.approvalflow.applications'
+import { Route as DemoApprovalflowComplianceRouteImport } from './routes/demo.approvalflow.compliance'
+import { Route as DemoApprovalflowEvcRouteImport } from './routes/demo.approvalflow.evc'
+import { Route as DemoApprovalflowScrutinyRouteImport } from './routes/demo.approvalflow.scrutiny'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoApprovalflowRoute = DemoApprovalflowRouteImport.update({
+  id: '/demo/approvalflow',
+  path: '/demo/approvalflow',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoLoginRoute = DemoLoginRouteImport.update({
+  id: '/demo/login',
+  path: '/demo/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoApprovalflowAdminRoute = DemoApprovalflowAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => DemoApprovalflowRoute,
+} as any)
+const DemoApprovalflowApplicationsRoute =
+  DemoApprovalflowApplicationsRouteImport.update({
+    id: '/applications',
+    path: '/applications',
+    getParentRoute: () => DemoApprovalflowRoute,
+  } as any)
+const DemoApprovalflowComplianceRoute =
+  DemoApprovalflowComplianceRouteImport.update({
+    id: '/compliance',
+    path: '/compliance',
+    getParentRoute: () => DemoApprovalflowRoute,
+  } as any)
+const DemoApprovalflowEvcRoute = DemoApprovalflowEvcRouteImport.update({
+  id: '/evc',
+  path: '/evc',
+  getParentRoute: () => DemoApprovalflowRoute,
+} as any)
+const DemoApprovalflowScrutinyRoute =
+  DemoApprovalflowScrutinyRouteImport.update({
+    id: '/scrutiny',
+    path: '/scrutiny',
+    getParentRoute: () => DemoApprovalflowRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/demo/approvalflow': typeof DemoApprovalflowRouteWithChildren
+  '/demo/login': typeof DemoLoginRoute
+  '/demo/approvalflow/admin': typeof DemoApprovalflowAdminRoute
+  '/demo/approvalflow/applications': typeof DemoApprovalflowApplicationsRoute
+  '/demo/approvalflow/compliance': typeof DemoApprovalflowComplianceRoute
+  '/demo/approvalflow/evc': typeof DemoApprovalflowEvcRoute
+  '/demo/approvalflow/scrutiny': typeof DemoApprovalflowScrutinyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/demo/approvalflow': typeof DemoApprovalflowRouteWithChildren
+  '/demo/login': typeof DemoLoginRoute
+  '/demo/approvalflow/admin': typeof DemoApprovalflowAdminRoute
+  '/demo/approvalflow/applications': typeof DemoApprovalflowApplicationsRoute
+  '/demo/approvalflow/compliance': typeof DemoApprovalflowComplianceRoute
+  '/demo/approvalflow/evc': typeof DemoApprovalflowEvcRoute
+  '/demo/approvalflow/scrutiny': typeof DemoApprovalflowScrutinyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/demo/approvalflow': typeof DemoApprovalflowRouteWithChildren
+  '/demo/login': typeof DemoLoginRoute
+  '/demo/approvalflow/admin': typeof DemoApprovalflowAdminRoute
+  '/demo/approvalflow/applications': typeof DemoApprovalflowApplicationsRoute
+  '/demo/approvalflow/compliance': typeof DemoApprovalflowComplianceRoute
+  '/demo/approvalflow/evc': typeof DemoApprovalflowEvcRoute
+  '/demo/approvalflow/scrutiny': typeof DemoApprovalflowScrutinyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/demo/approvalflow'
+    | '/demo/login'
+    | '/demo/approvalflow/admin'
+    | '/demo/approvalflow/applications'
+    | '/demo/approvalflow/compliance'
+    | '/demo/approvalflow/evc'
+    | '/demo/approvalflow/scrutiny'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/demo/approvalflow'
+    | '/demo/login'
+    | '/demo/approvalflow/admin'
+    | '/demo/approvalflow/applications'
+    | '/demo/approvalflow/compliance'
+    | '/demo/approvalflow/evc'
+    | '/demo/approvalflow/scrutiny'
+  id:
+    | '__root__'
+    | '/'
+    | '/demo/approvalflow'
+    | '/demo/login'
+    | '/demo/approvalflow/admin'
+    | '/demo/approvalflow/applications'
+    | '/demo/approvalflow/compliance'
+    | '/demo/approvalflow/evc'
+    | '/demo/approvalflow/scrutiny'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DemoApprovalflowRoute: typeof DemoApprovalflowRouteWithChildren
+  DemoLoginRoute: typeof DemoLoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +141,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo/approvalflow': {
+      id: '/demo/approvalflow'
+      path: '/demo/approvalflow'
+      fullPath: '/demo/approvalflow'
+      preLoaderRoute: typeof DemoApprovalflowRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/login': {
+      id: '/demo/login'
+      path: '/demo/login'
+      fullPath: '/demo/login'
+      preLoaderRoute: typeof DemoLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/approvalflow/admin': {
+      id: '/demo/approvalflow/admin'
+      path: '/admin'
+      fullPath: '/demo/approvalflow/admin'
+      preLoaderRoute: typeof DemoApprovalflowAdminRouteImport
+      parentRoute: typeof DemoApprovalflowRoute
+    }
+    '/demo/approvalflow/applications': {
+      id: '/demo/approvalflow/applications'
+      path: '/applications'
+      fullPath: '/demo/approvalflow/applications'
+      preLoaderRoute: typeof DemoApprovalflowApplicationsRouteImport
+      parentRoute: typeof DemoApprovalflowRoute
+    }
+    '/demo/approvalflow/compliance': {
+      id: '/demo/approvalflow/compliance'
+      path: '/compliance'
+      fullPath: '/demo/approvalflow/compliance'
+      preLoaderRoute: typeof DemoApprovalflowComplianceRouteImport
+      parentRoute: typeof DemoApprovalflowRoute
+    }
+    '/demo/approvalflow/evc': {
+      id: '/demo/approvalflow/evc'
+      path: '/evc'
+      fullPath: '/demo/approvalflow/evc'
+      preLoaderRoute: typeof DemoApprovalflowEvcRouteImport
+      parentRoute: typeof DemoApprovalflowRoute
+    }
+    '/demo/approvalflow/scrutiny': {
+      id: '/demo/approvalflow/scrutiny'
+      path: '/scrutiny'
+      fullPath: '/demo/approvalflow/scrutiny'
+      preLoaderRoute: typeof DemoApprovalflowScrutinyRouteImport
+      parentRoute: typeof DemoApprovalflowRoute
+    }
   }
 }
 
+interface DemoApprovalflowRouteChildren {
+  DemoApprovalflowAdminRoute: typeof DemoApprovalflowAdminRoute
+  DemoApprovalflowApplicationsRoute: typeof DemoApprovalflowApplicationsRoute
+  DemoApprovalflowComplianceRoute: typeof DemoApprovalflowComplianceRoute
+  DemoApprovalflowEvcRoute: typeof DemoApprovalflowEvcRoute
+  DemoApprovalflowScrutinyRoute: typeof DemoApprovalflowScrutinyRoute
+}
+
+const DemoApprovalflowRouteChildren: DemoApprovalflowRouteChildren = {
+  DemoApprovalflowAdminRoute: DemoApprovalflowAdminRoute,
+  DemoApprovalflowApplicationsRoute: DemoApprovalflowApplicationsRoute,
+  DemoApprovalflowComplianceRoute: DemoApprovalflowComplianceRoute,
+  DemoApprovalflowEvcRoute: DemoApprovalflowEvcRoute,
+  DemoApprovalflowScrutinyRoute: DemoApprovalflowScrutinyRoute,
+}
+
+const DemoApprovalflowRouteWithChildren =
+  DemoApprovalflowRoute._addFileChildren(DemoApprovalflowRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DemoApprovalflowRoute: DemoApprovalflowRouteWithChildren,
+  DemoLoginRoute: DemoLoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
