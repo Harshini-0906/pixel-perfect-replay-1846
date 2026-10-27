@@ -84,11 +84,11 @@ function planStages(type: AppType) { return RULES[type].stages.map((s) => s.stag
 
 /** Next stage after a forward move, skipping the deficiency loop and optional hearing. */
 function nextForward(type: AppType, from: Stage): Stage {
-  const plan = planStages(type).filter((s) => s !== "Deficiency" && s !== "ReScrutiny" && s !== "SAC_SHC");
+  const plan: Stage[] = planStages(type).filter((s) => s !== "Deficiency" && s !== "ReScrutiny" && s !== "SAC_SHC");
   if (from === "Submitted") return "Scrutiny";
-  if (from === "ReScrutiny") from = "Scrutiny";
   if (from === "SAC_SHC") return "Decision";
-  const i = plan.indexOf(from);
+  const cur: Stage = from === "ReScrutiny" ? "Scrutiny" : from;
+  const i = plan.indexOf(cur);
   return i >= 0 && i < plan.length - 1 ? plan[i + 1] : "Approved";
 }
 
