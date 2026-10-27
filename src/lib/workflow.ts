@@ -89,7 +89,7 @@ function nextForward(type: AppType, from: Stage): Stage {
   if (from === "SAC_SHC") return "Decision";
   const cur: Stage = from === "ReScrutiny" ? "Scrutiny" : from;
   const i = plan.indexOf(cur);
-  return i >= 0 && i < plan.length - 1 ? plan[i + 1] : "Approved";
+  return i >= 0 && i < plan.length - 1 ? (plan[i + 1] ?? "Approved") : "Approved";
 }
 
 export function canAct(stage: Stage, action: Action, role: Role) {

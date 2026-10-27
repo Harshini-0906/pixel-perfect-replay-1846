@@ -19,18 +19,19 @@ const sla: Record<string, number> = { Scrutiny: 15, Deficiency: 7, ReScrutiny: 5
 
 let seed = 7;
 const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+const pick = <T,>(a: T[], i: number): T => a[i % a.length] as T;
 
 export const CASES: CaseRow[] = Array.from({ length: 64 }, (_, i) => {
-  const stage = stages[Math.floor(rnd() * stages.length)];
+  const stage = pick(stages, Math.floor(rnd() * stages.length));
   return {
     id: `APP-2027-${String(1000 + i * 7)}`,
-    institution: names[i % names.length],
-    region: REGIONS[Math.floor(rnd() * REGIONS.length)],
-    type: types[Math.floor(rnd() * types.length)],
+    institution: pick(names, i),
+    region: pick(REGIONS, Math.floor(rnd() * REGIONS.length)),
+    type: pick(types, Math.floor(rnd() * types.length)),
     stage,
-    stageStartDay: TODAY - Math.floor(rnd() * sla[stage] * 2),
-    slaDays: sla[stage],
-    assignee: people[i % people.length],
+    stageStartDay: TODAY - Math.floor(rnd() * (sla[stage] ?? 5) * 2),
+    slaDays: sla[stage] ?? 5,
+    assignee: pick(people, i),
   };
 });
 
