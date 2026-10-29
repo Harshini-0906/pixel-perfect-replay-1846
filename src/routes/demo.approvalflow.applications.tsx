@@ -20,6 +20,7 @@ import {
   type AppType,
   type DocType,
 } from "@/lib/approval-flow";
+import { postApprovalStore } from "@/lib/post-approval";
 
 export const Route = createFileRoute("/demo/approvalflow/applications")({
   ssr: false,
@@ -210,6 +211,10 @@ function ApplicationDetail({
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [comment, setComment] = useState("");
   const [evcDate, setEvcDate] = useState("");
+  const [conditionTitle, setConditionTitle] = useState("");
+  const [conditionDesc, setConditionDesc] = useState("");
+  const [conditionDue, setConditionDue] = useState("");
+  const [hasConditions, setHasConditions] = useState(false);
 
   const inst = afStore.getInstitution(app.institutionId);
   const docs = afStore.getDocumentsForApp(app.id);
@@ -227,9 +232,29 @@ function ApplicationDetail({
     if (!transitionStage) return;
     try {
       afStore.transitionStage(app.id, transitionStage, userId, transitionRemarks || undefined);
-      notify(`Moved to ${STAGE_LABELS[transitionStage]}`);
+
+      // If approved with conditions, generate undertaking
+      if (transitionStage === "Approved" && hasConditions && conditionTitle.trim()) {
+        postApprovalStore.createUndertaking({
+          appId: app.id,
+          institutionId: app.institutionId,
+          title: conditionTitle.trim(),
+          conditionDescription: conditionDesc.trim() || conditionTitle.trim(),
+          assignedResponsibility: "Head of Institution / Principal",
+          dueDate: conditionDue || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+          userId,
+        });
+        notify(`Application Approved & Mandatory Undertaking recorded.`);
+      } else {
+        notify(`Moved to ${STAGE_LABELS[transitionStage]}`);
+      }
+
       setTransitionStage(null);
       setTransitionRemarks("");
+      setConditionTitle("");
+      setConditionDesc("");
+      setConditionDue("");
+      setHasConditions(false);
       onRefresh();
     } catch (e) {
       notify(`Error: ${e instanceof Error ? e.message : String(e)}`);
@@ -454,6 +479,64 @@ function ApplicationDetail({
                           value={transitionRemarks}
                           onChange={(e) => setTransitionRemarks(e.target.value)}
                         />
+
+                        {/* If transitioning to Approved, allow recording conditional undertakings */}
+                        {transitionStage === "Approved" && (
+                          <div className="border border-amber-200 bg-amber-50/50 rounded p-3 space-y-2.5">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={hasConditions}
+                                onChange={(e) => setHasConditions(e.target.checked)}
+                                className="rounded border-amber-300 text-[#163B65]"
+                              />
+                              <span className="text-[12px] font-semibold text-[#172B40]">
+                                Grant Approval with Post-Approval Undertaking / Condition
+                              </span>
+                            </label>
+
+                            {hasConditions && (
+                              <div className="space-y-2 pt-1">
+                                <div>
+                                  <label className="text-[10px] uppercase font-semibold text-[#5F6F82]">
+                                    Undertaking Title
+                                  </label>
+                                  <input
+                                    type="text"
+                                    className="w-full mt-0.5 rounded border border-[#D5DDE6] bg-white px-2.5 py-1.5 text-[12px] text-[#172B40]"
+                                    placeholder="e.g. Fire NOC Renewal / Faculty Cadre Fulfillment"
+                                    value={conditionTitle}
+                                    onChange={(e) => setConditionTitle(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] uppercase font-semibold text-[#5F6F82]">
+                                    Condition Description & Obligation
+                                  </label>
+                                  <textarea
+                                    className="w-full mt-0.5 rounded border border-[#D5DDE6] bg-white px-2.5 py-1.5 text-[12px] text-[#172B40]"
+                                    rows={2}
+                                    placeholder="Detail the statutory condition to be complied with post-approval..."
+                                    value={conditionDesc}
+                                    onChange={(e) => setConditionDesc(e.target.value)}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] uppercase font-semibold text-[#5F6F82]">
+                                    Compliance Due Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    className="w-full mt-0.5 rounded border border-[#D5DDE6] bg-white px-2.5 py-1.5 text-[12px] text-[#172B40]"
+                                    value={conditionDue}
+                                    onChange={(e) => setConditionDue(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <button
                           className="rounded bg-[#163B65] hover:bg-[#102F52] text-white font-semibold text-[12px] px-4 py-2 transition-colors"
                           onClick={doTransition}
@@ -785,7 +868,7 @@ function ApplicationsPage() {
       }
       return true;
     });
-  }, [search, filterStage, filterRegion, filterType, role, tick]);
+  }, [search, filterStage, filterRegion, filterType, roleStr, tick]);
 
   const regions = Array.from(new Set(afStore.applications.map((a) => a.region)));
   const stats = afStore.getStats();
