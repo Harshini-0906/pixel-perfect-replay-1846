@@ -15,19 +15,33 @@ export const Route = createFileRoute("/demo/approvalflow")({
 // ── Lucide-style icon paths (inline SVG to avoid extra dep) ──────────────────
 function Icon({ d, size = 16, className = "" }: { d: string; size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
       <path d={d} />
     </svg>
   );
 }
 
 const ICONS: Record<string, string> = {
-  applications: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
-  scrutiny: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
+  applications:
+    "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  scrutiny:
+    "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
   evc: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
   compliance: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
-  admin: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
-  logout: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
+  admin:
+    "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
+  logout:
+    "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
   menu: "M4 6h16M4 12h16M4 18h16",
   close: "M6 18L18 6M6 6l12 12",
   chevron: "M9 5l7 7-7 7",
@@ -35,10 +49,10 @@ const ICONS: Record<string, string> = {
 
 const NAV_ITEMS = [
   { path: "/demo/approvalflow/applications", label: "Applications", icon: "applications" },
-  { path: "/demo/approvalflow/scrutiny",     label: "Scrutiny & Verification", icon: "scrutiny" },
-  { path: "/demo/approvalflow/evc",          label: "EVC Scheduler", icon: "evc" },
-  { path: "/demo/approvalflow/compliance",   label: "Compliance Monitoring", icon: "compliance" },
-  { path: "/demo/approvalflow/admin",        label: "Admin Report", icon: "admin" },
+  { path: "/demo/approvalflow/scrutiny", label: "Scrutiny & Verification", icon: "scrutiny" },
+  { path: "/demo/approvalflow/evc", label: "EVC Scheduler", icon: "evc" },
+  { path: "/demo/approvalflow/compliance", label: "Compliance Monitoring", icon: "compliance" },
+  { path: "/demo/approvalflow/admin", label: "Admin Report", icon: "admin" },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -51,7 +65,9 @@ const ROLE_LABEL: Record<string, string> = {
 export function Header({ kicker, title, sub }: { kicker: string; title: string; sub: string }) {
   return (
     <div className="text-center">
-      <p className="text-xs font-semibold uppercase tracking-widest text-[#E99A35] mb-1">{kicker}</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-[#E99A35] mb-1">
+        {kicker}
+      </p>
       <h1 className="text-3xl font-bold text-[#163B65]">{title}</h1>
       <p className="mt-1 text-sm text-[#5F6F82]">{sub}</p>
     </div>
@@ -88,13 +104,15 @@ function ApprovalFlowLayout() {
 
   // Role-based nav filtering (role is typed as Role | null from workflow.ts but actually holds demo strings)
   const roleStr = role as string | null;
-  const visibleNav = NAV_ITEMS.filter(n => {
+  const visibleNav = NAV_ITEMS.filter((n) => {
     if (roleStr === "institution") return n.path === "/demo/approvalflow/applications";
     return true;
   });
 
   // Current page label for breadcrumb
-  const currentNav = visibleNav.find(n => currentPath === n.path || currentPath.startsWith(n.path));
+  const currentNav = visibleNav.find(
+    (n) => currentPath === n.path || currentPath.startsWith(n.path),
+  );
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -103,9 +121,9 @@ function ApprovalFlowLayout() {
         <div className="flex items-center gap-2.5">
           <div className="h-9 w-9 rounded-lg bg-[#E99A35] flex items-center justify-center flex-shrink-0 shadow">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="8" stroke="white" strokeWidth="1.8" fill="none"/>
-              <path d="M10 4v12M4 10h12" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-              <circle cx="10" cy="10" r="2.5" fill="white"/>
+              <circle cx="10" cy="10" r="8" stroke="white" strokeWidth="1.8" fill="none" />
+              <path d="M10 4v12M4 10h12" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="10" cy="10" r="2.5" fill="white" />
             </svg>
           </div>
           <div>
@@ -123,7 +141,7 @@ function ApprovalFlowLayout() {
             { label: "Overdue", value: stats.overdue, color: "text-red-400" },
             { label: "Approved", value: stats.approved, color: "text-green-400" },
             { label: "Total", value: stats.total, color: "text-white" },
-          ].map(s => (
+          ].map((s) => (
             <div key={s.label} className="rounded bg-white/5 px-2 py-1.5 text-center">
               <p className={`text-sm font-bold ${s.color}`}>{s.value}</p>
               <p className="text-[10px] text-white/40">{s.label}</p>
@@ -135,11 +153,14 @@ function ApprovalFlowLayout() {
       {/* Navigation */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
         <p className="section-header mt-1 mb-2">Navigation</p>
-        {visibleNav.map(item => {
+        {visibleNav.map((item) => {
           const isActive = currentPath === item.path || currentPath.startsWith(item.path);
           const badge =
-            item.icon === "scrutiny" ? (stats.byStage?.Scrutiny ?? 0) :
-            item.icon === "evc"      ? (stats.byStage?.EVC ?? 0) : 0;
+            item.icon === "scrutiny"
+              ? (stats.byStage?.Scrutiny ?? 0)
+              : item.icon === "evc"
+                ? (stats.byStage?.EVC ?? 0)
+                : 0;
           return (
             <Link
               key={item.path}
@@ -164,7 +185,9 @@ function ApprovalFlowLayout() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[12px] font-semibold text-white truncate">{user.name}</p>
-              <p className="text-[10px] text-white/40 truncate">{ROLE_LABEL[user.role] ?? user.role}</p>
+              <p className="text-[10px] text-white/40 truncate">
+                {ROLE_LABEL[user.role] ?? user.role}
+              </p>
             </div>
             <button
               onClick={handleLogout}
@@ -175,7 +198,9 @@ function ApprovalFlowLayout() {
             </button>
           </div>
         ) : (
-          <Link to="/demo/login" className="text-xs text-[#E99A35] hover:underline">Sign in →</Link>
+          <Link to="/demo/login" className="text-xs text-[#E99A35] hover:underline">
+            Sign in →
+          </Link>
         )}
       </div>
     </div>

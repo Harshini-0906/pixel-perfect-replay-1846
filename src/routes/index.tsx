@@ -13,7 +13,10 @@ export const Route = createFileRoute("/")({
           "ApprovalFlow AI is a modern Indian government regulatory portal for AICTE institutional approvals, scrutiny, and compliance management.",
       },
       { property: "og:title", content: "ApprovalFlow AI — AICTE Institutional Approval Portal" },
-      { property: "og:description", content: "Regulatory compliance and institutional approval management." },
+      {
+        property: "og:description",
+        content: "Regulatory compliance and institutional approval management.",
+      },
     ],
   }),
   component: HomePage,
@@ -59,7 +62,16 @@ function HomePage() {
           {[
             {
               icon: (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               ),
@@ -68,7 +80,16 @@ function HomePage() {
             },
             {
               icon: (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
               ),
@@ -77,14 +98,23 @@ function HomePage() {
             },
             {
               icon: (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               ),
               title: "Approval Workflow",
               desc: "Multi-stage approval pipeline with EVC scheduling and audit trail.",
             },
-          ].map(f => (
+          ].map((f) => (
             <div key={f.title} className="bg-white rounded border border-[#E1E7ED] p-4 text-left">
               <div className="text-[#163B65] mb-2">{f.icon}</div>
               <p className="font-semibold text-[13px] text-[#172B40]">{f.title}</p>
@@ -100,7 +130,16 @@ function HomePage() {
             className="inline-flex items-center gap-2 rounded bg-[#163B65] hover:bg-[#102F52] text-white font-semibold text-[13px] px-6 py-2.5 transition-colors shadow-sm"
           >
             Access Demo Portal
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </Link>

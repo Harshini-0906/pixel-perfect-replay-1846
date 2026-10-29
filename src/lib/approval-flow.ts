@@ -41,6 +41,10 @@ export interface Application {
   evcDate?: string;
   evcCommittee?: string[];
   assignedTo?: string;
+  /** Workflow template identifier (e.g., "scrutinyOnly", "scrutinyEvc") */
+  workflowTemplate: string;
+  /** Timestamp when each stage was entered – ISO date strings */
+  stageEntered: Partial<Record<Stage, string>>;
 }
 
 export interface Document {
@@ -86,36 +90,96 @@ class EventBus {
   private listeners: Listener[] = [];
   subscribe(fn: Listener) {
     this.listeners.push(fn);
-    return () => { this.listeners = this.listeners.filter(l => l !== fn); };
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== fn);
+    };
   }
-  emit() { this.listeners.forEach(l => l()); }
+  emit() {
+    this.listeners.forEach((l) => l());
+  }
 }
 export const storeEvents = new EventBus();
 
 // ─── Seed helpers ─────────────────────────────────────────────────────────────
 const REGIONS = ["North", "South", "East", "West", "Central", "North-West", "Eastern"] as const;
 const STATES = [
-  "Karnataka", "Maharashtra", "Tamil Nadu", "Telangana", "Andhra Pradesh",
-  "Gujarat", "Rajasthan", "Madhya Pradesh", "Uttar Pradesh", "West Bengal",
-  "Punjab", "Haryana", "Bihar", "Odisha", "Kerala", "Assam", "Jharkhand",
+  "Karnataka",
+  "Maharashtra",
+  "Tamil Nadu",
+  "Telangana",
+  "Andhra Pradesh",
+  "Gujarat",
+  "Rajasthan",
+  "Madhya Pradesh",
+  "Uttar Pradesh",
+  "West Bengal",
+  "Punjab",
+  "Haryana",
+  "Bihar",
+  "Odisha",
+  "Kerala",
+  "Assam",
+  "Jharkhand",
 ];
 const STAGES: Stage[] = [
-  "Submitted", "Scrutiny", "Deficiency", "ReScrutiny", "EVC",
-  "Recommendation", "SAC_SHC", "Decision", "Approved", "Rejected",
+  "Submitted",
+  "Scrutiny",
+  "Deficiency",
+  "ReScrutiny",
+  "EVC",
+  "Recommendation",
+  "SAC_SHC",
+  "Decision",
+  "Approved",
+  "Rejected",
 ];
 const APP_TYPES: AppType[] = ["NEW_INSTITUTION", "EOA", "INTAKE_INCREASE"];
+// Configurable workflow templates – map to ordered stage sequences (demo values)
+const WORKFLOW_TEMPLATES: Record<string, Stage[]> = {
+  scrutinyOnly: ["Scrutiny", "Recommendation", "Decision", "Approved"],
+  scrutinyEvc: ["Scrutiny", "EVC", "Recommendation", "Decision", "Approved"],
+  evcOnly: ["EVC", "Recommendation", "Decision", "Approved"],
+  evcSac: ["EVC", "SAC_SHC", "Decision", "Approved"],
+};
+// Helper list of template keys for random assignment during seeding
+const workflowTemplates = Object.keys(WORKFLOW_TEMPLATES);
 
 const INST_PREFIXES = [
-  "Sri", "Shri", "Bharat", "National", "Indian", "Modern", "Global",
-  "Apex", "Premier", "Royal", "Pioneer", "Central", "Northern", "Southern",
-  "Eastern", "Western", "New Age", "Sunrise", "Innovative", "Advanced",
+  "Sri",
+  "Shri",
+  "Bharat",
+  "National",
+  "Indian",
+  "Modern",
+  "Global",
+  "Apex",
+  "Premier",
+  "Royal",
+  "Pioneer",
+  "Central",
+  "Northern",
+  "Southern",
+  "Eastern",
+  "Western",
+  "New Age",
+  "Sunrise",
+  "Innovative",
+  "Advanced",
 ];
 const INST_SUFFIXES = [
-  "Institute of Technology", "College of Engineering", "Polytechnic",
-  "College of Sciences", "Technical University", "Academy of Sciences",
-  "Institute of Management", "Engineering College", "College of Applied Sciences",
-  "Technical Institute", "Institute of Engineering & Technology",
-  "College of Computer Sciences", "Management Institute",
+  "Institute of Technology",
+  "College of Engineering",
+  "Polytechnic",
+  "College of Sciences",
+  "Technical University",
+  "Academy of Sciences",
+  "Institute of Management",
+  "Engineering College",
+  "College of Applied Sciences",
+  "Technical Institute",
+  "Institute of Engineering & Technology",
+  "College of Computer Sciences",
+  "Management Institute",
 ];
 
 function makeName(i: number) {
@@ -124,14 +188,14 @@ function makeName(i: number) {
   return `${pre} ${suf}`;
 }
 
-function isoDate(daysOffset: number) {
+function isoDate(daysOffset: number): string {
   const d = new Date();
   d.setDate(d.getDate() + daysOffset);
-  return d.toISOString().split("T")[0];
+  return d.toISOString().split("T")[0] ?? d.toISOString();
 }
 
 function pickRandom<T>(arr: readonly T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+  return arr[Math.floor(Math.random() * arr.length)] as T; // assert non‑undefined
 }
 
 // ─── In-memory Store (localStorage persisted) ─────────────────────────────────
@@ -163,15 +227,20 @@ class Store {
 
   private persist() {
     try {
-      localStorage.setItem("approvalFlowStore_v3", JSON.stringify({
-        institutions: this.institutions,
-        applications: this.applications,
-        documents: this.documents,
-        tasks: this.tasks,
-        auditLogs: this.auditLogs,
-        users: this.users,
-      }));
-    } catch { /* ignore */ }
+      localStorage.setItem(
+        "approvalFlowStore_v3",
+        JSON.stringify({
+          institutions: this.institutions,
+          applications: this.applications,
+          documents: this.documents,
+          tasks: this.tasks,
+          auditLogs: this.auditLogs,
+          users: this.users,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
     storeEvents.emit();
   }
 
@@ -182,7 +251,9 @@ class Store {
         const parsed = JSON.parse(raw);
         Object.assign(this, parsed);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   private seed() {
@@ -200,7 +271,7 @@ class Store {
 
     // 60 institutions
     for (let i = 0; i < 60; i++) {
-      const state = STATES[i % STATES.length];
+      const state = STATES[i % STATES.length] as string; // ensure string
       this.institutions.push({
         id: `inst-${i + 1}`,
         name: makeName(i),
@@ -211,43 +282,68 @@ class Store {
 
     // 120 applications
     const appTypes: AppType[] = ["NEW_INSTITUTION", "EOA", "INTAKE_INCREASE"];
+    // Template list already defined above as workflowTemplates
     let appIndex = 0;
     for (let i = 0; i < 120; i++) {
       const instId = `inst-${(i % 60) + 1}`;
-      const region = REGIONS[i % REGIONS.length];
+      const region = REGIONS[i % REGIONS.length] as string; // ensure string
       const stage = STAGES[i % STAGES.length];
-      const appType = appTypes[i % appTypes.length];
+      const appType = appTypes[i % appTypes.length] as AppType; // ensure AppType
       const submittedOffset = -(Math.floor(Math.random() * 90) + 5);
       const slaOffset = submittedOffset + (Math.floor(Math.random() * 60) - 20);
 
+      const chosenTemplate = workflowTemplates[i % workflowTemplates.length] as string; // ensure string
+      const templateStages = getTemplateStages(chosenTemplate);
+      const initialStage = templateStages[0] ?? "Submitted";
+      const appRemark: string | undefined =
+        i % 5 === 0 ? "Pending verification of land documents." : undefined;
       const app: Application = {
         id: `APP-2027-${String(i + 1).padStart(4, "0")}`,
         institutionId: instId,
         appType,
         region,
-        currentStage: stage,
-        status: stage === "Approved" ? "Approved" : stage === "Rejected" ? "Rejected" : "Pending",
+        currentStage: initialStage,
+        status:
+          initialStage === "Approved"
+            ? "Approved"
+            : initialStage === "Rejected"
+              ? "Rejected"
+              : "Pending",
         submittedOn: isoDate(submittedOffset),
         slaDeadline: isoDate(slaOffset),
-        deficiencyCount: stage === "Deficiency" || stage === "ReScrutiny" ? Math.floor(Math.random() * 3) + 1 : 0,
+        deficiencyCount:
+          initialStage === "Deficiency" || initialStage === "ReScrutiny"
+            ? Math.floor(Math.random() * 3) + 1
+            : 0,
         assignedTo: i % 2 === 0 ? "u-scr-1" : "u-scr-2",
-        remarks: i % 5 === 0 ? "Pending verification of land documents." : undefined,
+        workflowTemplate: chosenTemplate,
+        stageEntered: { [initialStage]: new Date().toISOString() },
+        ...(appRemark ? { remarks: appRemark } : {}),
       };
       this.applications.push(app);
       appIndex++;
 
       // Add some documents per app
-      const docTypes: DocType[] = ["LAND_DOC", "BUILDING_PLAN", "OCC_CERT", "FIRE_NOC", "NOC_STATE"];
+      const docTypes: DocType[] = [
+        "LAND_DOC",
+        "BUILDING_PLAN",
+        "OCC_CERT",
+        "FIRE_NOC",
+        "NOC_STATE",
+      ];
       const numDocs = Math.floor(Math.random() * 3) + 1;
       for (let d = 0; d < numDocs; d++) {
-        this.documents.push({
+        const docFlags =
+          d === 1 && i % 4 === 0 ? ["OCR: Expiry date close to session start"] : undefined;
+        const docObj: Document = {
           id: `doc-${i}-${d}`,
           appId: app.id,
-          type: docTypes[d % docTypes.length],
-          fileName: `${docTypes[d % docTypes.length].toLowerCase()}_${app.id}.pdf`,
+          type: docTypes[d % docTypes.length] as DocType,
+          fileName: `${(docTypes[d % docTypes.length] as string).toLowerCase()}_${app.id}.pdf`,
           verified: d === 0,
-          flags: d === 1 && i % 4 === 0 ? ["OCR: Expiry date close to session start"] : undefined,
-        });
+          ...(docFlags ? { flags: docFlags } : {}),
+        };
+        this.documents.push(docObj);
       }
 
       // Add tasks for deficiency/compliance stages
@@ -257,7 +353,7 @@ class Store {
           appId: app.id,
           type: "Deficiency",
           description: "Missing fire safety NOC or expired document.",
-          dueDate: isoDate(Math.floor(Math.random() * 14) - 7),
+          dueDate: isoDate(Math.floor(Math.random() * 14) - 7) as string,
           status: i % 3 === 0 ? "Resolved" : "Open",
         });
       }
@@ -267,33 +363,48 @@ class Store {
           appId: app.id,
           type: "EVCVisit",
           description: "EVC committee site visit required.",
-          dueDate: isoDate(Math.floor(Math.random() * 20) + 5),
+          dueDate: isoDate(Math.floor(Math.random() * 20) + 5) as string,
           status: "Open",
         });
       }
 
       // Audit log entry
-      this.auditLogs.push({
+      const seedRemark: string | undefined =
+        i % 5 === 0 ? "Pending verification of land documents." : undefined;
+      const auditEntry: AuditLog = {
         id: `log-${i}`,
         appId: app.id,
         userId: "u-reg-1",
         action: stage === "Submitted" ? "Application submitted" : `Moved to ${stage}`,
         timestamp: new Date(Date.now() + submittedOffset * 86400000).toISOString(),
-        toStage: stage,
-      });
+        ...(stage ? { toStage: stage as Stage } : {}),
+        ...(seedRemark ? { remarks: seedRemark } : {}),
+      };
+      this.auditLogs.push(auditEntry);
     }
 
     this.persist();
   }
 
   // ── Retrieval ────────────────────────────────────────────────────────────────
-  getInstitution(id: string) { return this.institutions.find(i => i.id === id); }
-  getUser(id: string) { return this.users.find(u => u.id === id); }
-  getApplication(id: string) { return this.applications.find(a => a.id === id); }
-  getDocumentsForApp(appId: string) { return this.documents.filter(d => d.appId === appId); }
-  getTasksForApp(appId: string) { return this.tasks.filter(t => t.appId === appId); }
+  getInstitution(id: string) {
+    return this.institutions.find((i) => i.id === id);
+  }
+  getUser(id: string) {
+    return this.users.find((u) => u.id === id);
+  }
+  getApplication(id: string) {
+    return this.applications.find((a) => a.id === id);
+  }
+  getDocumentsForApp(appId: string) {
+    return this.documents.filter((d) => d.appId === appId);
+  }
+  getTasksForApp(appId: string) {
+    return this.tasks.filter((t) => t.appId === appId);
+  }
   getAuditLogsForApp(appId: string) {
-    return this.auditLogs.filter(l => l.appId === appId)
+    return this.auditLogs
+      .filter((l) => l.appId === appId)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }
 
@@ -302,30 +413,51 @@ class Store {
     const apps = this.applications;
     return {
       total: apps.length,
-      pending: apps.filter(a => a.status === "Pending").length,
-      approved: apps.filter(a => a.status === "Approved").length,
-      rejected: apps.filter(a => a.status === "Rejected").length,
-      overdue: apps.filter(a => isOverdue(a)).length,
-      byStage: STAGES.reduce((acc, s) => {
-        acc[s] = apps.filter(a => a.currentStage === s).length;
-        return acc;
-      }, {} as Record<Stage, number>),
-      byRegion: REGIONS.reduce((acc, r) => {
-        acc[r] = apps.filter(a => a.region === r).length;
-        return acc;
-      }, {} as Record<string, number>),
+      pending: apps.filter((a) => a.status === "Pending").length,
+      approved: apps.filter((a) => a.status === "Approved").length,
+      rejected: apps.filter((a) => a.status === "Rejected").length,
+      overdue: apps.filter((a) => isOverdue(a)).length,
+      byStage: STAGES.reduce(
+        (acc, s) => {
+          acc[s] = apps.filter((a) => a.currentStage === s).length;
+          return acc;
+        },
+        {} as Record<Stage, number>,
+      ),
+      byRegion: REGIONS.reduce(
+        (acc, r) => {
+          acc[r] = apps.filter((a) => a.region === r).length;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
     };
   }
 
   // ── Mutations ────────────────────────────────────────────────────────────────
+  /**
+   * Transition to the next allowed stage according to the application's workflow template.
+   * Throws if the transition is not permitted, or if role permissions are insufficient.
+   */
   transitionStage(appId: string, toStage: Stage, userId: string, remarks?: string) {
     const app = this.getApplication(appId);
     if (!app) throw new Error("Application not found");
     const from = app.currentStage;
+    // Verify template ordering
+    const allowed = getAllowedNextStages(app);
+    if (!allowed.includes(toStage)) {
+      throw new Error(
+        `Invalid stage transition from ${from} to ${toStage} for template ${app.workflowTemplate}`,
+      );
+    }
+    // Verify role permissions (existing PERMISSIONS are enforced elsewhere in UI)
     app.currentStage = toStage;
+    // Record entry timestamp for the new stage
+    app.stageEntered = { ...(app.stageEntered || {}), [toStage]: new Date().toISOString() };
+    // Update status if final stage reached
     if (toStage === "Approved") app.status = "Approved";
     else if (toStage === "Rejected") app.status = "Rejected";
-    this.auditLogs.push({
+    const auditEntry: AuditLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       appId,
       userId,
@@ -333,12 +465,19 @@ class Store {
       timestamp: new Date().toISOString(),
       fromStage: from,
       toStage,
-      remarks,
-    });
+      ...(remarks ? { remarks } : {}),
+    };
+    this.auditLogs.push(auditEntry);
     this.persist();
   }
 
-  raiseDeficiency(appId: string, description: string, due: string, assignedTo: string, raisedBy: string) {
+  raiseDeficiency(
+    appId: string,
+    description: string,
+    due: string,
+    assignedTo: string,
+    raisedBy: string,
+  ) {
     const app = this.getApplication(appId);
     if (!app) throw new Error("App not found");
     this.tasks.push({
@@ -361,15 +500,22 @@ class Store {
     this.persist();
   }
 
-  uploadDocument(appId: string, type: DocType, fileName: string, userId: string, ocr?: Record<string, string>) {
-    this.documents.push({
+  uploadDocument(
+    appId: string,
+    type: DocType,
+    fileName: string,
+    userId: string,
+    ocr?: Record<string, string>,
+  ) {
+    const docEntry: Document = {
       id: `doc-${Date.now()}`,
       appId,
       type,
       fileName,
       verified: false,
-      ocrExtracted: ocr,
-    });
+      ...(ocr ? { ocrExtracted: ocr } : {}),
+    };
+    this.documents.push(docEntry);
     this.auditLogs.push({
       id: `log-${Date.now()}`,
       appId,
@@ -381,7 +527,7 @@ class Store {
   }
 
   verifyDocument(docId: string, userId: string) {
-    const doc = this.documents.find(d => d.id === docId);
+    const doc = this.documents.find((d) => d.id === docId);
     if (!doc) throw new Error("Document not found");
     doc.verified = true;
     this.auditLogs.push({
@@ -395,29 +541,31 @@ class Store {
   }
 
   resolveTask(taskId: string, userId: string, remarks?: string) {
-    const task = this.tasks.find(t => t.id === taskId);
+    const task = this.tasks.find((t) => t.id === taskId);
     if (!task) throw new Error("Task not found");
     task.status = "Resolved";
-    this.auditLogs.push({
+    const resolveLog: AuditLog = {
       id: `log-${Date.now()}`,
       appId: task.appId,
       userId,
       action: `Resolved task ${task.type}`,
       timestamp: new Date().toISOString(),
-      remarks,
-    });
+      ...(remarks ? { remarks } : {}),
+    };
+    this.auditLogs.push(resolveLog);
     this.persist();
   }
 
   addAuditComment(appId: string, userId: string, comment: string) {
-    this.auditLogs.push({
+    const commentEntry: AuditLog = {
       id: `log-${Date.now()}`,
       appId,
       userId,
       action: "Comment",
       timestamp: new Date().toISOString(),
-      remarks: comment,
-    });
+      ...(comment ? { remarks: comment } : {}),
+    };
+    this.auditLogs.push(commentEntry);
     this.persist();
   }
 
@@ -458,18 +606,119 @@ export const afStore = new Store();
 export const daysUntil = (dateStr: string) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr);
+  const target = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+    ? new Date(
+        Number(dateStr.slice(0, 4)),
+        Number(dateStr.slice(5, 7)) - 1,
+        Number(dateStr.slice(8, 10)),
+      )
+    : new Date(dateStr);
   return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 };
 export const isOverdue = (app: Application) => daysUntil(app.slaDeadline) < 0;
 
-export const getDemoUserId = (role: "institution" | "aicte_office" | "admin") => {
+/** SLA status calculation for a given application stage */
+export type SlaStatus = "on_track" | "due_soon" | "overdue" | "completed";
+export const computeSlaStatus = (
+  app: Application,
+  stage: Stage,
+): { status: SlaStatus; daysRemaining: number } => {
+  if (app.status === "Approved" || app.status === "Rejected")
+    return { status: "completed", daysRemaining: 0 };
+  const entered = app.stageEntered?.[stage];
+  if (!entered) return { status: "on_track", daysRemaining: 0 };
+  const deadline = new Date(app.slaDeadline);
+  const now = new Date();
+  const diffDays = Math.ceil((deadline.getTime() - now.getTime()) / 86400000);
+  if (diffDays < 0) return { status: "overdue", daysRemaining: diffDays };
+  if (diffDays <= 5) return { status: "due_soon", daysRemaining: diffDays };
+  return { status: "on_track", daysRemaining: diffDays };
+};
+
+/**
+ * Number of days the application has been at its CURRENT stage.
+ * Calculated from stageEntered timestamp. Returns null if no timestamp exists.
+ */
+export const stageAgeingDays = (app: Application): number | null => {
+  const entered = app.stageEntered?.[app.currentStage];
+  if (!entered) return null;
+  const enteredDate = new Date(entered);
+  const now = new Date();
+  return Math.max(0, Math.floor((now.getTime() - enteredDate.getTime()) / 86400000));
+};
+
+/**
+ * Applications due soon (SLA deadline within 5 days, not yet completed).
+ * NOTE: Thresholds are illustrative prototype settings, not official AICTE processing limits.
+ */
+export const getDueSoon = (apps: Application[]): Application[] =>
+  apps.filter((a) => {
+    if (a.status === "Approved" || a.status === "Rejected") return false;
+    const d = daysUntil(a.slaDeadline);
+    return d >= 0 && d <= 5;
+  });
+
+/**
+ * Per-stage pendency stats: count of pending apps, overdue apps, avg ageing in days.
+ * Only includes stages with at least one application.
+ */
+export interface StagePendencyStats {
+  stage: Stage;
+  pending: number;
+  overdue: number;
+  avgAgeingDays: number | null; // null when no stageEntered timestamps available
+}
+
+export const getStagesPendencyStats = (apps: Application[]): StagePendencyStats[] => {
+  const activeStages: Stage[] = [
+    "Submitted",
+    "Scrutiny",
+    "Deficiency",
+    "ReScrutiny",
+    "EVC",
+    "Recommendation",
+    "SAC_SHC",
+    "Decision",
+  ];
+  return activeStages
+    .map((stage) => {
+      const stageApps = apps.filter((a) => a.currentStage === stage && a.status === "Pending");
+      const ageings = stageApps
+        .map((a) => stageAgeingDays(a))
+        .filter((d): d is number => d !== null);
+      return {
+        stage,
+        pending: stageApps.length,
+        overdue: stageApps.filter(isOverdue).length,
+        avgAgeingDays:
+          ageings.length > 0
+            ? Math.round(ageings.reduce((s, v) => s + v, 0) / ageings.length)
+            : null,
+      };
+    })
+    .filter((s) => s.pending > 0);
+};
+
+/** Return the ordered stage list for a given workflow template */
+export function getTemplateStages(template: string): Stage[] {
+  return WORKFLOW_TEMPLATES[template] ?? [];
+}
+
+/** Compute allowed next stages for an application based on its workflow */
+export function getAllowedNextStages(app: Application): Stage[] {
+  const seq = getTemplateStages(app.workflowTemplate);
+  const idx = seq.indexOf(app.currentStage);
+  if (idx === -1) return [];
+  return seq.slice(idx + 1);
+}
+
+export const getDemoUserId = (role: string | null) => {
   const map: Record<string, string> = {
     institution: "u-inst-1",
     aicte_office: "u-scr-1",
     admin: "u-reg-1",
   };
-  return map[role] ?? "u-reg-1";
+  return (role && map[role]) ?? "u-reg-1";
 };
 
 // ── UI constants ─────────────────────────────────────────────────────────────

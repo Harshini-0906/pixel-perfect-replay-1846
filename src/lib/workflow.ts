@@ -1,19 +1,46 @@
 export type Stage =
-  | "Submitted" | "Scrutiny" | "Deficiency" | "ReScrutiny" | "EVC"
-  | "Recommendation" | "SAC_SHC" | "Decision" | "Approved" | "Rejected";
+  | "Submitted"
+  | "Scrutiny"
+  | "Deficiency"
+  | "ReScrutiny"
+  | "EVC"
+  | "Recommendation"
+  | "SAC_SHC"
+  | "Decision"
+  | "Approved"
+  | "Rejected";
 
 export type AppType = "NEW_INSTITUTION" | "EOA" | "INTAKE_INCREASE";
 export type Action = "APPROVE" | "RAISE_DEFICIENCY" | "RESPOND" | "REJECT" | "REFER_HEARING";
-export type Role = "SYSTEM_ADMIN" | "REGIONAL_OFFICER" | "SCRUTINY_OFFICER" | "COMMITTEE_MEMBER" | "INSTITUTION_LIAISON";
+export type Role =
+  | "SYSTEM_ADMIN"
+  | "REGIONAL_OFFICER"
+  | "SCRUTINY_OFFICER"
+  | "COMMITTEE_MEMBER"
+  | "INSTITUTION_LIAISON";
 
 export const STAGE_LABEL: Record<Stage, string> = {
-  Submitted: "Submitted", Scrutiny: "Scrutiny", Deficiency: "Deficiency", ReScrutiny: "Re-scrutiny",
-  EVC: "EVC", Recommendation: "Recommendation", SAC_SHC: "SAC / SHC", Decision: "Decision",
-  Approved: "Approved (LoA/EoA)", Rejected: "Rejected",
+  Submitted: "Submitted",
+  Scrutiny: "Scrutiny",
+  Deficiency: "Deficiency",
+  ReScrutiny: "Re-scrutiny",
+  EVC: "EVC",
+  Recommendation: "Recommendation",
+  SAC_SHC: "SAC / SHC",
+  Decision: "Decision",
+  Approved: "Approved (LoA/EoA)",
+  Rejected: "Rejected",
 };
 
 /** Rule engine: stage plan per application type, with SLA days and acting role. */
-export const RULES: Record<AppType, { label: string; stages: { stage: Stage; sla: number; role: Role }[]; docs: { code: string; label: string; ref: string }[] }> = {
+export const RULES: Record<
+  AppType,
+  {
+    label: string;
+    stages: { stage: Stage; sla: number; role: Role }[];
+    docs: { code: string; label: string; ref: string }[];
+  }
+> = {
   NEW_INSTITUTION: {
     label: "New Institution",
     stages: [
@@ -69,9 +96,15 @@ export const RULES: Record<AppType, { label: string; stages: { stage: Stage; sla
 /** Which role may perform which action at a stage. */
 export const PERMISSIONS: Partial<Record<Stage, Partial<Record<Action, Role[]>>>> = {
   Submitted: { APPROVE: ["REGIONAL_OFFICER", "SCRUTINY_OFFICER"] },
-  Scrutiny: { APPROVE: ["SCRUTINY_OFFICER", "REGIONAL_OFFICER"], RAISE_DEFICIENCY: ["SCRUTINY_OFFICER", "REGIONAL_OFFICER"] },
+  Scrutiny: {
+    APPROVE: ["SCRUTINY_OFFICER", "REGIONAL_OFFICER"],
+    RAISE_DEFICIENCY: ["SCRUTINY_OFFICER", "REGIONAL_OFFICER"],
+  },
   Deficiency: { RESPOND: ["INSTITUTION_LIAISON"], REJECT: ["REGIONAL_OFFICER"] },
-  ReScrutiny: { APPROVE: ["SCRUTINY_OFFICER", "REGIONAL_OFFICER"], RAISE_DEFICIENCY: ["SCRUTINY_OFFICER"] },
+  ReScrutiny: {
+    APPROVE: ["SCRUTINY_OFFICER", "REGIONAL_OFFICER"],
+    RAISE_DEFICIENCY: ["SCRUTINY_OFFICER"],
+  },
   EVC: { APPROVE: ["COMMITTEE_MEMBER"], RAISE_DEFICIENCY: ["COMMITTEE_MEMBER"] },
   Recommendation: { APPROVE: ["REGIONAL_OFFICER"], REFER_HEARING: ["REGIONAL_OFFICER"] },
   SAC_SHC: { APPROVE: ["COMMITTEE_MEMBER"], REJECT: ["COMMITTEE_MEMBER"] },
@@ -80,11 +113,15 @@ export const PERMISSIONS: Partial<Record<Stage, Partial<Record<Action, Role[]>>>
 
 export const MAX_DEFICIENCY_CYCLES = 2;
 
-function planStages(type: AppType) { return RULES[type].stages.map((s) => s.stage); }
+function planStages(type: AppType) {
+  return RULES[type].stages.map((s) => s.stage);
+}
 
 /** Next stage after a forward move, skipping the deficiency loop and optional hearing. */
 function nextForward(type: AppType, from: Stage): Stage {
-  const plan: Stage[] = planStages(type).filter((s) => s !== "Deficiency" && s !== "ReScrutiny" && s !== "SAC_SHC");
+  const plan: Stage[] = planStages(type).filter(
+    (s) => s !== "Deficiency" && s !== "ReScrutiny" && s !== "SAC_SHC",
+  );
   if (from === "Submitted") return "Scrutiny";
   if (from === "SAC_SHC") return "Decision";
   const cur: Stage = from === "ReScrutiny" ? "Scrutiny" : from;
@@ -97,25 +134,40 @@ export function canAct(stage: Stage, action: Action, role: Role) {
 }
 
 export function transition(
-  type: AppType, stage: Stage, action: Action, role: Role, deficiencyCycles = 0,
+  type: AppType,
+  stage: Stage,
+  action: Action,
+  role: Role,
+  deficiencyCycles = 0,
 ): { ok: true; to: Stage } | { ok: false; error: string } {
-  if (!canAct(stage, action, role)) return { ok: false, error: `${role} cannot ${action} at ${stage}` };
+  if (!canAct(stage, action, role))
+    return { ok: false, error: `${role} cannot ${action} at ${stage}` };
   switch (action) {
-    case "APPROVE": return { ok: true, to: nextForward(type, stage) };
+    case "APPROVE":
+      return { ok: true, to: nextForward(type, stage) };
     case "RAISE_DEFICIENCY":
-      if (deficiencyCycles >= MAX_DEFICIENCY_CYCLES) return { ok: false, error: "Maximum deficiency cycles reached — refer to decision" };
+      if (deficiencyCycles >= MAX_DEFICIENCY_CYCLES)
+        return { ok: false, error: "Maximum deficiency cycles reached — refer to decision" };
       return { ok: true, to: "Deficiency" };
-    case "RESPOND": return { ok: true, to: "ReScrutiny" };
+    case "RESPOND":
+      return { ok: true, to: "ReScrutiny" };
     case "REFER_HEARING":
-      return planStages(type).includes("SAC_SHC") ? { ok: true, to: "SAC_SHC" } : { ok: false, error: "No hearing stage for this type" };
-    case "REJECT": return { ok: true, to: "Rejected" };
+      return planStages(type).includes("SAC_SHC")
+        ? { ok: true, to: "SAC_SHC" }
+        : { ok: false, error: "No hearing stage for this type" };
+    case "REJECT":
+      return { ok: true, to: "Rejected" };
   }
 }
 
 export type SlaStatus = "on_track" | "due_soon" | "overdue" | "escalated";
 
 /** SLA ladder: ≥75% elapsed due soon (remind), >100% overdue (notify RO), ≥150% escalated (Regional Director). */
-export function slaStatus(startedDay: number, slaDays: number, today: number): { status: SlaStatus; pct: number; level: number } {
+export function slaStatus(
+  startedDay: number,
+  slaDays: number,
+  today: number,
+): { status: SlaStatus; pct: number; level: number } {
   const pct = Math.round(((today - startedDay) / slaDays) * 100);
   if (pct >= 150) return { status: "escalated", pct, level: pct >= 200 ? 3 : 2 };
   if (pct > 100) return { status: "overdue", pct, level: 1 };
@@ -124,7 +176,10 @@ export function slaStatus(startedDay: number, slaDays: number, today: number): {
 }
 
 /** Document validity: expired, or expiring within 90 days of the reference date. */
-export function docValidity(expiry: string | undefined, ref: string): "valid" | "expiring" | "expired" | "missing" | "no_expiry" {
+export function docValidity(
+  expiry: string | undefined,
+  ref: string,
+): "valid" | "expiring" | "expired" | "missing" | "no_expiry" {
   if (expiry === undefined) return "no_expiry";
   if (!expiry) return "missing";
   const d = (new Date(expiry).getTime() - new Date(ref).getTime()) / 86400000;

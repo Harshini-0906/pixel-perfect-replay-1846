@@ -3,19 +3,32 @@ import { transition, slaStatus, docValidity } from "@/lib/workflow";
 
 describe("workflow rules", () => {
   it("new institution goes Scrutiny -> EVC on approval", () => {
-    expect(transition("NEW_INSTITUTION", "Scrutiny", "APPROVE", "SCRUTINY_OFFICER")).toEqual({ ok: true, to: "EVC" });
+    expect(transition("NEW_INSTITUTION", "Scrutiny", "APPROVE", "SCRUTINY_OFFICER")).toEqual({
+      ok: true,
+      to: "EVC",
+    });
   });
   it("EoA skips EVC: Scrutiny -> Decision", () => {
-    expect(transition("EOA", "Scrutiny", "APPROVE", "SCRUTINY_OFFICER")).toEqual({ ok: true, to: "Decision" });
+    expect(transition("EOA", "Scrutiny", "APPROVE", "SCRUTINY_OFFICER")).toEqual({
+      ok: true,
+      to: "Decision",
+    });
   });
   it("re-scrutiny approval moves on to EVC", () => {
-    expect(transition("NEW_INSTITUTION", "ReScrutiny", "APPROVE", "SCRUTINY_OFFICER")).toEqual({ ok: true, to: "EVC" });
+    expect(transition("NEW_INSTITUTION", "ReScrutiny", "APPROVE", "SCRUTINY_OFFICER")).toEqual({
+      ok: true,
+      to: "EVC",
+    });
   });
   it("institution liaison cannot approve scrutiny", () => {
-    expect(transition("NEW_INSTITUTION", "Scrutiny", "APPROVE", "INSTITUTION_LIAISON").ok).toBe(false);
+    expect(transition("NEW_INSTITUTION", "Scrutiny", "APPROVE", "INSTITUTION_LIAISON").ok).toBe(
+      false,
+    );
   });
   it("blocks a third deficiency cycle", () => {
-    expect(transition("NEW_INSTITUTION", "ReScrutiny", "RAISE_DEFICIENCY", "SCRUTINY_OFFICER", 2).ok).toBe(false);
+    expect(
+      transition("NEW_INSTITUTION", "ReScrutiny", "RAISE_DEFICIENCY", "SCRUTINY_OFFICER", 2).ok,
+    ).toBe(false);
   });
   it("SLA ladder thresholds", () => {
     expect(slaStatus(0, 8, 6).status).toBe("due_soon");
