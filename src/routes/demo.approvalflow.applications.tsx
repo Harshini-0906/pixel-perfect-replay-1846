@@ -21,6 +21,12 @@ import {
   type DocType,
 } from "@/lib/approval-flow";
 import { postApprovalStore } from "@/lib/post-approval";
+import {
+  caseIntelligenceService,
+  type CaseIntelligenceResult,
+  type CommunicationDraft,
+  type CommunicationDraftType,
+} from "@/lib/case-intelligence";
 
 export const Route = createFileRoute("/demo/approvalflow/applications")({
   ssr: false,
@@ -151,14 +157,15 @@ function WorkflowTimeline({ currentStage }: { currentStage: AppStage }) {
               <div className="flex flex-col items-center">
                 <div
                   className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all
-                  ${isDone
+                  ${
+                    isDone
                       ? "bg-[#163B65] text-white"
                       : isCurrent
                         ? "bg-[#E99A35] text-white ring-2 ring-[#E99A35]/30 ring-offset-1"
                         : isRejected && idx === mainFlow.length - 1
                           ? "bg-red-500 text-white"
                           : "bg-[#E1E7ED] text-[#8290A0]"
-                    }`}
+                  }`}
                 >
                   {isDone ? "✓" : idx + 1}
                 </div>
@@ -196,9 +203,11 @@ function ApplicationDetail({
   onClose: () => void;
   onRefresh: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<"overview" | "docs" | "tasks" | "timeline">(
-    "overview",
-  );
+  const [role] = useDemoRole();
+  const roleStr = role as string | null;
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "case-intelligence" | "docs" | "tasks" | "timeline"
+  >("overview");
   const [toast, setToast] = useState("");
   const [transitionStage, setTransitionStage] = useState<AppStage | null>(null);
   const [transitionRemarks, setTransitionRemarks] = useState("");
@@ -214,6 +223,78 @@ function ApplicationDetail({
   const [conditionDesc, setConditionDesc] = useState("");
   const [conditionDue, setConditionDue] = useState("");
   const [hasConditions, setHasConditions] = useState(false);
+
+  // Case Intelligence state
+  const [intel, setIntel] = useState<CaseIntelligenceResult | null>(null);
+  const [loadingIntel, setLoadingIntel] = useState(false);
+  const [intelError, setIntelError] = useState<string | null>(null);
+  const [draftType, setDraftType] = useState<CommunicationDraftType>("DEFICIENCY_NOTICE");
+  const [draftInstructions, setDraftInstructions] = useState("");
+  const [currentDraft, setCurrentDraft] = useState<CommunicationDraft | null>(null);
+  const [isDrafting, setIsDrafting] = useState(false);
+
+  const fetchIntelligence = useCallback(async () => {
+    setLoadingIntel(true);
+    setIntelError(null);
+    try {
+      const res = await caseIntelligenceService.getCaseIntelligence(app.id);
+      setIntel(res);
+    } catch (e) {
+      setIntelError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoadingIntel(false);
+    }
+  }, [app.id]);
+
+  useEffect(() => {
+    fetchIntelligence();
+  }, [fetchIntelligence]);
+
+  const handleGenerateDraft = async (typeToGen?: CommunicationDraftType) => {
+    const t = typeToGen || draftType;
+    setIsDrafting(true);
+    try {
+      const d = await caseIntelligenceService.generateDraft(
+        app.id,
+        t,
+        draftInstructions.trim() || undefined,
+      );
+      setCurrentDraft(d);
+      notify(`${d.title} generated.`);
+    } catch (e) {
+      notify(`Failed to generate draft: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
+  const handleSaveDraft = () => {
+    if (!currentDraft) return;
+    caseIntelligenceService.saveDraftToAuditTrail({
+      appId: app.id,
+      draft: currentDraft,
+      userId,
+    });
+    notify("Draft saved to application audit trail.");
+    onRefresh();
+  };
+
+  const handleDispatchDraft = () => {
+    if (!currentDraft) return;
+    caseIntelligenceService.dispatchDraftNotification({
+      appId: app.id,
+      draft: currentDraft,
+      targetRole: "institution",
+    });
+    notify("Official notification dispatched to institution portal.");
+    onRefresh();
+  };
+
+  const handleCopyDraft = () => {
+    if (!currentDraft) return;
+    navigator.clipboard.writeText(currentDraft.body);
+    notify("Draft copied to clipboard.");
+  };
 
   const inst = afStore.getInstitution(app.institutionId);
   const docs = afStore.getDocumentsForApp(app.id);
@@ -298,9 +379,10 @@ function ApplicationDetail({
     onRefresh();
   };
 
-  const TABS = ["overview", "docs", "tasks", "timeline"] as const;
-  const TAB_LABELS = {
+  const TABS = ["overview", "case-intelligence", "docs", "tasks", "timeline"] as const;
+  const TAB_LABELS: Record<(typeof TABS)[number], string> = {
     overview: "Overview",
+    "case-intelligence": "Case Intelligence ✦",
     docs: `Documents (${docs.length})`,
     tasks: `Tasks (${tasks.length})`,
     timeline: `Activity Timeline (${auditLogs.length})`,
@@ -380,10 +462,11 @@ function ApplicationDetail({
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors ${activeTab === tab
-                ? "border-[#163B65] text-[#163B65]"
-                : "border-transparent text-[#8290A0] hover:text-[#172B40]"
-                }`}
+              className={`px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors ${
+                activeTab === tab
+                  ? "border-[#163B65] text-[#163B65]"
+                  : "border-transparent text-[#8290A0] hover:text-[#172B40]"
+              }`}
             >
               {TAB_LABELS[tab]}
             </button>
@@ -458,10 +541,11 @@ function ApplicationDetail({
                         <button
                           key={s}
                           onClick={() => setTransitionStage(s)}
-                          className={`rounded px-3 py-1.5 text-[12px] font-medium border transition-colors ${transitionStage === s
-                            ? "bg-[#163B65] text-white border-[#163B65]"
-                            : "border-[#D5DDE6] text-[#5F6F82] hover:border-[#163B65] hover:text-[#163B65]"
-                            }`}
+                          className={`rounded px-3 py-1.5 text-[12px] font-medium border transition-colors ${
+                            transitionStage === s
+                              ? "bg-[#163B65] text-white border-[#163B65]"
+                              : "border-[#D5DDE6] text-[#5F6F82] hover:border-[#163B65] hover:text-[#163B65]"
+                          }`}
                         >
                           → {STAGE_LABELS[s]}
                         </button>
@@ -645,6 +729,600 @@ function ApplicationDetail({
                 </div>
               </div>
             </>
+          )}
+
+          {/* CASE INTELLIGENCE TAB */}
+          {activeTab === "case-intelligence" && (
+            <div className="space-y-4">
+              {/* Header Bar */}
+              <div className="bg-white rounded border border-[#E1E7ED] p-3 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 text-purple-800 px-3 py-1 text-xs font-semibold border border-purple-200">
+                    <span className="h-2 w-2 rounded-full bg-purple-600 animate-pulse" />
+                    {intel?.providerName ?? "Deterministic Intelligence Engine"}
+                  </span>
+                  <span className="text-[11px] text-[#5F6F82]">
+                    Mode:{" "}
+                    <strong className="text-[#172B40]">
+                      {intel?.providerMode === "llm"
+                        ? "LLM Provider (AI-Assisted)"
+                        : "Deterministic Heuristics Engine (Rule-Based Prototype)"}
+                    </strong>
+                  </span>
+                  {intel?.generatedAt && (
+                    <span className="text-[10px] text-[#8290A0]">
+                      Generated: {new Date(intel.generatedAt).toLocaleTimeString("en-IN")}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={fetchIntelligence}
+                  disabled={loadingIntel}
+                  className="rounded bg-[#163B65] hover:bg-[#102F52] text-white text-[11px] font-medium px-3 py-1.5 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <svg
+                    className={`h-3 w-3 ${loadingIntel ? "animate-spin" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  {loadingIntel ? "Re-Analyzing..." : "Refresh Intelligence"}
+                </button>
+              </div>
+
+              {/* Official AICTE Human-in-the-Loop Safeguard Notice */}
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded p-3 text-[11px] leading-relaxed flex items-start gap-2 shadow-sm">
+                <span className="font-bold text-amber-700 shrink-0 text-xs">
+                  ⚠️ ADVISORY NOTICE:
+                </span>
+                <span>
+                  This Case Intelligence briefing is an advisory decision-support tool. In
+                  compliance with statutory guidelines, AI algorithms cannot approve, reject, or
+                  modify application status independently. Every action requires authorized human
+                  verification and confirmation.
+                </span>
+              </div>
+
+              {intelError && (
+                <div className="bg-red-50 border border-red-200 text-red-800 rounded p-3 text-xs">
+                  Error generating intelligence: {intelError}
+                </div>
+              )}
+
+              {loadingIntel && !intel && (
+                <div className="bg-white rounded border border-[#E1E7ED] p-8 text-center text-sm text-[#5F6F82]">
+                  Analyzing application timeline, statutory compliance, and documents...
+                </div>
+              )}
+
+              {intel && (
+                <>
+                  {/* FEATURE 3: APPLICATION RISK & ATTENTION EXPLANATION */}
+                  <div
+                    className={`rounded border p-4 shadow-sm ${
+                      intel.attention.tier === "CRITICAL"
+                        ? "bg-red-50/70 border-red-300 text-red-950"
+                        : intel.attention.tier === "HIGH_ATTENTION"
+                          ? "bg-amber-50/70 border-amber-300 text-amber-950"
+                          : intel.attention.tier === "MODERATE"
+                            ? "bg-yellow-50/70 border-yellow-300 text-yellow-950"
+                            : "bg-emerald-50/70 border-emerald-300 text-emerald-950"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${
+                              intel.attention.tier === "CRITICAL"
+                                ? "bg-red-600 text-white"
+                                : intel.attention.tier === "HIGH_ATTENTION"
+                                  ? "bg-amber-600 text-white"
+                                  : intel.attention.tier === "MODERATE"
+                                    ? "bg-yellow-600 text-white"
+                                    : "bg-emerald-600 text-white"
+                            }`}
+                          >
+                            Attention Tier: {intel.attention.tier.replace(/_/g, " ")}
+                          </span>
+                          <span className="text-xs font-semibold text-[#172B40] bg-white px-2 py-0.5 rounded border border-[#E1E7ED]">
+                            Heuristic Risk Score: {intel.attention.score}/100
+                          </span>
+                        </div>
+                        <p className="text-xs font-medium mt-1">{intel.attention.summary}</p>
+                      </div>
+                    </div>
+
+                    {/* 6-Dimension Factor Breakdown Table */}
+                    <div className="mt-3 bg-white rounded border border-[#E1E7ED] overflow-hidden text-xs">
+                      <div className="px-3 py-2 bg-[#F5F7FA] border-b border-[#E1E7ED] font-semibold text-[11px] text-[#5F6F82]">
+                        Operational Risk Factor Breakdown
+                      </div>
+                      <div className="divide-y divide-[#E1E7ED]">
+                        {intel.attention.factors.map((f, i) => (
+                          <div
+                            key={i}
+                            className="p-2.5 flex flex-wrap items-center justify-between gap-2"
+                          >
+                            <div className="space-y-0.5 flex-1 min-w-[200px]">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-[#172B40]">{f.dimension}</span>
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                                    f.severity === "CRITICAL"
+                                      ? "bg-red-100 text-red-800"
+                                      : f.severity === "HIGH"
+                                        ? "bg-amber-100 text-amber-800"
+                                        : f.severity === "MEDIUM"
+                                          ? "bg-yellow-100 text-yellow-800"
+                                          : "bg-green-100 text-green-800"
+                                  }`}
+                                >
+                                  {f.severity}
+                                </span>
+                                {f.isFact && (
+                                  <span className="text-[9px] bg-blue-50 text-blue-700 px-1.5 rounded border border-blue-200">
+                                    Verified Fact
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-[#5F6F82]">{f.observation}</p>
+                            </div>
+                            <span className="text-[10px] text-[#8290A0] italic">
+                              {f.supportingEvidence}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[#8290A0] mt-2 italic">
+                      {intel.attention.disclaimer}
+                    </p>
+                  </div>
+
+                  {/* FEATURE 1: AI CASE SUMMARY & STAGE ROADMAP */}
+                  <div className="bg-white rounded border border-[#E1E7ED] overflow-hidden shadow-sm">
+                    <div className="px-4 py-2.5 bg-[#F5F7FA] border-b border-[#E1E7ED] flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82]">
+                        Executive Case Summary
+                      </p>
+                      <span className="text-[10px] text-[#8290A0]">
+                        Template: {app.workflowTemplate}
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded text-[12px] text-[#172B40] leading-relaxed">
+                        {intel.summary.executiveNarrative}
+                      </div>
+
+                      {/* Workflow Stage Roadmap */}
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#8290A0] mb-1.5">
+                          Workflow Roadmap & Progress
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                          {intel.summary.completedStages.map((s) => (
+                            <span
+                              key={s}
+                              className="inline-flex items-center gap-1 rounded bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[11px]"
+                            >
+                              ✓ {STAGE_LABELS[s]}
+                            </span>
+                          ))}
+                          <span className="inline-flex items-center gap-1 rounded bg-[#163B65] text-white px-2.5 py-0.5 text-[11px] font-semibold shadow-xs">
+                            ● {STAGE_LABELS[intel.summary.currentStage]} (Current)
+                          </span>
+                          {intel.summary.pendingStages.map((s) => (
+                            <span
+                              key={s}
+                              className="rounded bg-gray-50 text-gray-500 border border-gray-200 px-2 py-0.5 text-[11px]"
+                            >
+                              {STAGE_LABELS[s]}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Summary Metrics Row */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[#E1E7ED] text-xs">
+                        <div className="p-2 bg-[#F5F7FA] rounded border border-[#E1E7ED]">
+                          <p className="text-[10px] text-[#8290A0]">Open Deficiencies</p>
+                          <p className="font-semibold text-[#172B40]">
+                            {intel.summary.openDeficiencies.length}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-[#F5F7FA] rounded border border-[#E1E7ED]">
+                          <p className="text-[10px] text-[#8290A0]">Doc Validity Concerns</p>
+                          <p className="font-semibold text-[#172B40]">
+                            {intel.summary.documentValidityIssues.length}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-[#F5F7FA] rounded border border-[#E1E7ED]">
+                          <p className="text-[10px] text-[#8290A0]">Overdue Undertakings</p>
+                          <p className="font-semibold text-red-600">
+                            {intel.summary.undertakingsSummary.overdue}
+                          </p>
+                        </div>
+                        <div className="p-2 bg-[#F5F7FA] rounded border border-[#E1E7ED]">
+                          <p className="text-[10px] text-[#8290A0]">SLA Status</p>
+                          <p className="font-semibold text-[#172B40]">
+                            {intel.summary.slaStatus.toUpperCase()} (
+                            {intel.summary.daysRemainingOrOverdue}d)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* FEATURE 2 & 7: INTELLIGENT ISSUE DETECTION & EVIDENCE */}
+                  <div className="bg-white rounded border border-[#E1E7ED] overflow-hidden shadow-sm">
+                    <div className="px-4 py-2.5 bg-[#F5F7FA] border-b border-[#E1E7ED] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82]">
+                          Detected Actionable Issues ({intel.issues.length})
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-[#8290A0]">
+                        Empirical Source Verification
+                      </span>
+                    </div>
+
+                    {intel.issues.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-green-700 bg-green-50">
+                        ✓ No pending operational issues or compliance violations detected for this
+                        application.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[#E1E7ED]">
+                        {intel.issues.map((issue) => (
+                          <div key={issue.id} className="p-4 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                                    issue.severity === "CRITICAL"
+                                      ? "bg-red-100 text-red-800 border border-red-200"
+                                      : issue.severity === "HIGH"
+                                        ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                        : issue.severity === "MEDIUM"
+                                          ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                                          : "bg-slate-100 text-slate-800 border border-slate-200"
+                                  }`}
+                                >
+                                  {issue.severity}
+                                </span>
+                                <span className="text-[10px] font-semibold text-[#5F6F82] uppercase tracking-wider">
+                                  {issue.category}
+                                </span>
+                                {issue.isFact ? (
+                                  <span className="text-[9px] bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200 font-medium">
+                                    Verified Source Fact
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] bg-purple-50 text-purple-700 px-1.5 py-0.2 rounded border border-purple-200 font-medium">
+                                    Heuristic Interpretation
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-[#8290A0]">
+                                Status:{" "}
+                                <strong className="text-[#172B40]">{issue.currentStatus}</strong>
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className="text-[13px] font-semibold text-[#172B40]">
+                                {issue.title}
+                              </h4>
+                              <p className="text-xs text-[#5F6F82] mt-0.5 leading-relaxed">
+                                {issue.explanation}
+                              </p>
+                            </div>
+
+                            {/* Supporting Record Link */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                              <div className="inline-flex items-center gap-1.5 text-[11px] bg-gray-50 border border-gray-200 px-2 py-1 rounded text-[#5F6F82]">
+                                <span className="font-mono text-[#163B65]">
+                                  {issue.supportingRecord.label}
+                                </span>
+                                {issue.supportingRecord.details && (
+                                  <span className="text-[10px] text-[#8290A0]">
+                                    ({issue.supportingRecord.details})
+                                  </span>
+                                )}
+                              </div>
+
+                              {issue.supportingRecord.type === "document" && (
+                                <button
+                                  onClick={() => setActiveTab("docs")}
+                                  className="text-[11px] text-[#163B65] font-medium hover:underline"
+                                >
+                                  View in Documents Tab →
+                                </button>
+                              )}
+                              {issue.supportingRecord.type === "task" && (
+                                <button
+                                  onClick={() => setActiveTab("tasks")}
+                                  className="text-[11px] text-[#163B65] font-medium hover:underline"
+                                >
+                                  View in Tasks Tab →
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Suggested Action Callout */}
+                            <div className="p-2 bg-blue-50/50 border border-blue-100 rounded text-[11px] text-blue-900 flex items-start gap-1.5">
+                              <span className="font-semibold shrink-0 text-blue-700">
+                                Suggested Action:
+                              </span>
+                              <span>{issue.suggestedAction}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* FEATURE 4 & 9: RECOMMENDED NEXT ACTIONS */}
+                  <div className="bg-white rounded border border-[#E1E7ED] overflow-hidden shadow-sm">
+                    <div className="px-4 py-2.5 bg-[#F5F7FA] border-b border-[#E1E7ED] flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82]">
+                        Recommended Next Administrative Actions ({intel.recommendations.length})
+                      </p>
+                      <span className="text-[10px] text-amber-700 font-medium">
+                        Human Confirmation Required
+                      </span>
+                    </div>
+
+                    {intel.recommendations.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-[#5F6F82]">
+                        No pending administrative recommendations at this stage.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[#E1E7ED]">
+                        {intel.recommendations.map((rec) => (
+                          <div key={rec.id} className="p-4 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="rounded bg-[#163B65] text-white px-2 py-0.5 text-[10px] font-semibold">
+                                  {rec.actionType.replace(/_/g, " ").toUpperCase()}
+                                </span>
+                                {rec.targetStage && (
+                                  <span className="rounded bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 text-[10px] font-medium">
+                                    Target: {STAGE_LABELS[rec.targetStage]}
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-[#8290A0]">
+                                  Role:{" "}
+                                  <strong className="text-[#172B40]">{rec.requiredRole}</strong>
+                                </span>
+                              </div>
+                              <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                                {rec.priority} PRIORITY
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className="text-[13px] font-semibold text-[#172B40]">
+                                {rec.title}
+                              </h4>
+                              <p className="text-xs text-[#5F6F82] mt-0.5">{rec.rationale}</p>
+                            </div>
+
+                            <p className="text-[11px] text-[#8290A0] italic">
+                              Supporting Evidence: {rec.supportingEvidence}
+                            </p>
+
+                            <div className="pt-2 flex items-center gap-2">
+                              {rec.targetStage ? (
+                                <button
+                                  onClick={() => {
+                                    setTransitionStage(rec.targetStage ?? null);
+                                    setActiveTab("overview");
+                                    notify(
+                                      `Stage transition to ${STAGE_LABELS[rec.targetStage!]} selected in Overview tab for your review.`,
+                                    );
+                                  }}
+                                  className="rounded bg-[#163B65] hover:bg-[#102F52] text-white text-[12px] font-semibold px-3 py-1.5 transition-colors"
+                                >
+                                  Prepare Transition → {STAGE_LABELS[rec.targetStage]}
+                                </button>
+                              ) : rec.actionType === "send_reminder" ||
+                                rec.actionType === "raise_deficiency" ? (
+                                <button
+                                  onClick={() => {
+                                    const draftT: CommunicationDraftType =
+                                      rec.actionType === "raise_deficiency"
+                                        ? "DEFICIENCY_NOTICE"
+                                        : "PENDING_DOC_REMINDER";
+                                    setDraftType(draftT);
+                                    handleGenerateDraft(draftT);
+                                  }}
+                                  className="rounded bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-semibold px-3 py-1.5 transition-colors"
+                                >
+                                  Generate Notice Draft
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    caseIntelligenceService.executeActionWithHumanConfirmation({
+                                      appId: app.id,
+                                      actionId: rec.id,
+                                      userId,
+                                      userRole: roleStr ?? "officer",
+                                      remarks: `Officer confirmed recommendation: ${rec.title}`,
+                                    });
+                                    notify("Action recorded in official application audit log.");
+                                    onRefresh();
+                                  }}
+                                  className="rounded border border-[#163B65] text-[#163B65] hover:bg-slate-50 text-[12px] font-medium px-3 py-1.5 transition-colors"
+                                >
+                                  Confirm & Record Action
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* FEATURE 5: AI COMMUNICATION DRAFTING STUDIO */}
+                  <div className="bg-white rounded border border-[#E1E7ED] overflow-hidden shadow-sm">
+                    <div className="px-4 py-2.5 bg-[#F5F7FA] border-b border-[#E1E7ED] flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82]">
+                        AI Communication Drafting Studio
+                      </p>
+                      <span className="text-[10px] text-[#8290A0]">
+                        Official AICTE Correspondence Generator
+                      </span>
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      <p className="text-xs text-[#5F6F82]">
+                        Generate structured, context-grounded official communications for this
+                        application. Officers must review and edit drafts before saving or
+                        dispatching.
+                      </p>
+
+                      {/* Draft Type Selection Chips */}
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#8290A0] mb-1.5">
+                          Select Correspondence Template:
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(
+                            [
+                              ["DEFICIENCY_NOTICE", "Deficiency Notice"],
+                              ["CLARIFICATION_REQUEST", "Clarification Request"],
+                              ["PENDING_DOC_REMINDER", "Missing Doc Reminder"],
+                              ["UNDERTAKING_REMINDER", "Undertaking Directive"],
+                              ["OFFICER_SUMMARY", "Officer Case Brief"],
+                              ["INTERNAL_NOTE", "Internal Appraisal Minute"],
+                            ] as [CommunicationDraftType, string][]
+                          ).map(([dt, label]) => (
+                            <button
+                              key={dt}
+                              onClick={() => {
+                                setDraftType(dt);
+                                handleGenerateDraft(dt);
+                              }}
+                              className={`rounded px-2.5 py-1 text-[11px] font-medium border transition-colors ${
+                                draftType === dt
+                                  ? "bg-[#163B65] text-white border-[#163B65]"
+                                  : "border-[#D5DDE6] text-[#5F6F82] hover:border-[#163B65] hover:text-[#163B65]"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Custom officer instructions */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-semibold uppercase tracking-wider text-[#8290A0]">
+                          Custom Officer Directives or Remarks (Optional):
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full rounded border border-[#D5DDE6] px-3 py-1.5 text-xs text-[#172B40] focus:outline-none focus:ring-2 focus:ring-[#163B65]/20 focus:border-[#163B65]"
+                          placeholder="e.g. Specify requirement of fire safety NOC issued within past 6 months..."
+                          value={draftInstructions}
+                          onChange={(e) => setDraftInstructions(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => handleGenerateDraft()}
+                          disabled={isDrafting}
+                          className="rounded bg-[#163B65] hover:bg-[#102F52] text-white text-[12px] font-semibold px-4 py-2 transition-colors disabled:opacity-50"
+                        >
+                          {isDrafting ? "Drafting..." : "Generate Official Draft ✦"}
+                        </button>
+                      </div>
+
+                      {/* Generated Draft Preview and Editor */}
+                      {currentDraft && (
+                        <div className="mt-4 border border-[#E1E7ED] rounded bg-[#F5F7FA] p-4 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E1E7ED] pb-2 text-xs">
+                            <div>
+                              <p className="font-semibold text-[#172B40]">{currentDraft.title}</p>
+                              <p className="text-[10px] text-[#8290A0]">
+                                Ref: <code>{currentDraft.referenceNo}</code> · Date:{" "}
+                                {currentDraft.date}
+                              </p>
+                            </div>
+                            <span className="text-[10px] bg-white border border-[#E1E7ED] px-2 py-0.5 rounded text-[#5F6F82]">
+                              To: {currentDraft.recipient}
+                            </span>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-[#8290A0] block mb-1">
+                              Subject:
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full rounded border border-[#D5DDE6] bg-white px-3 py-1.5 text-xs font-medium text-[#172B40] focus:outline-none focus:ring-2 focus:ring-[#163B65]/20"
+                              value={currentDraft.subject}
+                              onChange={(e) =>
+                                setCurrentDraft({ ...currentDraft, subject: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-[#8290A0] block mb-1">
+                              Draft Body (Officer Editable):
+                            </label>
+                            <textarea
+                              rows={10}
+                              className="w-full rounded border border-[#D5DDE6] bg-white p-3 font-mono text-[11px] text-[#172B40] focus:outline-none focus:ring-2 focus:ring-[#163B65]/20"
+                              value={currentDraft.body}
+                              onChange={(e) =>
+                                setCurrentDraft({ ...currentDraft, body: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E1E7ED]">
+                            <button
+                              onClick={handleCopyDraft}
+                              className="rounded border border-[#D5DDE6] bg-white hover:bg-slate-50 text-[#172B40] text-xs font-medium px-3 py-1.5 transition-colors"
+                            >
+                              📋 Copy to Clipboard
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={handleSaveDraft}
+                                className="rounded bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
+                              >
+                                Save to Audit Trail
+                              </button>
+                              <button
+                                onClick={handleDispatchDraft}
+                                className="rounded bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-1.5 transition-colors"
+                              >
+                                Dispatch In-Portal Notice
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {/* DOCUMENTS TAB */}
@@ -865,7 +1543,7 @@ function ApplicationsPage() {
       }
       return true;
     });
-  }, [search, filterStage, filterRegion, filterType, role, tick]);
+  }, [search, filterStage, filterRegion, filterType, role, roleStr, tick]);
 
   const regions = Array.from(new Set(afStore.applications.map((a) => a.region)));
   const stats = afStore.getStats();
@@ -1141,8 +1819,5 @@ function ActivityTimeline({ appId }: { appId: string }) {
         ))}
       </div>
     </div>
-  );
-}
-    </div >
   );
 }
