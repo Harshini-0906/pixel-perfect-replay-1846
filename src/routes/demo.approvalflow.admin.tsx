@@ -14,6 +14,7 @@ import {
   STAGE_LABELS,
   type Stage as AppStage,
 } from "@/lib/approval-flow";
+import { notifStore, type EscalationRecord } from "@/lib/notifications";
 
 export const Route = createFileRoute("/demo/approvalflow/admin")({
   ssr: false,
@@ -109,6 +110,22 @@ function AdminDashboard() {
   const bottleneckStage =
     stageFunnel.length > 0 ? stageFunnel.reduce((a, b) => (b.overdue > a.overdue ? b : a)) : null;
   const maxRegionTotal = Math.max(...regionStats.map((r) => r.total));
+
+  const allEscalations = notifStore.getAllEscalations();
+  const activeEscalations = allEscalations.filter((e) => e.status === "active");
+  const level1Count = activeEscalations.filter((e) => e.level === 1).length;
+  const level2Count = activeEscalations.filter((e) => e.level === 2).length;
+  const level3Count = activeEscalations.filter((e) => e.level === 3).length;
+
+  // Officer-wise escalation aggregation
+  const officerEscMap = activeEscalations.reduce(
+    (acc, e) => {
+      const officer = e.assignedOfficerId || "Unassigned";
+      acc[officer] = (acc[officer] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
   return (
     <div className="space-y-5">
@@ -286,6 +303,154 @@ function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Escalation Intelligence Panel (Sprint 3) */}
+      <div className="bg-white rounded border border-[#E1E7ED] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#E1E7ED] bg-[#F5F7FA] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse" />
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82]">
+              Escalation Intelligence & Monitoring Engine
+            </h2>
+          </div>
+          <span className="text-[10px] text-[#8290A0]">
+            {activeEscalations.length} Active Escalations Across Regulatory Pipeline
+          </span>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Level KPI breakdown */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="bg-[#F8FAFC] border border-[#E1E7ED] rounded p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#8290A0]">
+                Total Active
+              </p>
+              <p className="text-2xl font-bold text-[#172B40] mt-0.5">{activeEscalations.length}</p>
+              <p className="text-[10px] text-[#5F6F82] mt-0.5">Awaiting regulatory action</p>
+            </div>
+            <div className="bg-blue-50/50 border border-blue-200 rounded p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">
+                  Level 1 (Officer)
+                </p>
+                <span className="text-[9px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-bold">
+                  L1
+                </span>
+              </div>
+              <p className="text-2xl font-bold text-blue-900 mt-0.5">{level1Count}</p>
+              <p className="text-[10px] text-blue-700 mt-0.5">&ge; 1d overdue reminder</p>
+            </div>
+            <div className="bg-amber-50/50 border border-amber-200 rounded p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+                  Level 2 (Supervisor)
+                </p>
+                <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-bold">
+                  L2
+                </span>
+              </div>
+              <p className="text-2xl font-bold text-amber-900 mt-0.5">{level2Count}</p>
+              <p className="text-[10px] text-amber-700 mt-0.5">&ge; 7d elevated to supervisor</p>
+            </div>
+            <div className="bg-red-50/60 border border-red-200 rounded p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-red-700">
+                  Level 3 (Admin Critical)
+                </p>
+                <span className="text-[9px] bg-red-100 text-red-800 px-1.5 py-0.2 rounded font-bold">
+                  L3
+                </span>
+              </div>
+              <p className="text-2xl font-bold text-red-900 mt-0.5">{level3Count}</p>
+              <p className="text-[10px] text-red-700 mt-0.5">&ge; 14d administrative pendency</p>
+            </div>
+          </div>
+
+          {/* Officer-wise pending escalations & recent escalation feed */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
+            {/* Officer breakdown */}
+            <div className="border border-[#E1E7ED] rounded p-3 bg-white">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82] mb-2.5">
+                Officer-Wise Pending Escalations
+              </h3>
+              {Object.keys(officerEscMap).length === 0 ? (
+                <p className="text-[12px] text-[#8290A0] text-center py-4">
+                  No active officer escalations.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(officerEscMap).map(([officer, count]) => (
+                    <div
+                      key={officer}
+                      className="flex items-center justify-between text-[12px] border-b border-[#F0F3F6] pb-1.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[11px] bg-[#EEF3F8] text-[#163B65] px-1.5 py-0.5 rounded">
+                          {officer}
+                        </span>
+                        <span className="text-[#5F6F82]">Handling Officer</span>
+                      </div>
+                      <span className="font-bold text-red-700 bg-red-50 border border-red-200 rounded px-2 py-0.5 text-[11px]">
+                        {count} active
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Recent escalations */}
+            <div className="border border-[#E1E7ED] rounded p-3 bg-white">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82] mb-2.5">
+                Active Escalations Awaiting Intervention
+              </h3>
+              {activeEscalations.length === 0 ? (
+                <p className="text-[12px] text-[#8290A0] text-center py-4">
+                  No escalations currently active.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {activeEscalations.slice(0, 8).map((esc) => (
+                    <div
+                      key={esc.id}
+                      className="p-2 bg-[#F8FAFC] border border-[#E1E7ED] rounded flex items-start justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                              esc.level === 3
+                                ? "bg-red-100 text-red-800 border border-red-300"
+                                : esc.level === 2
+                                  ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                  : "bg-blue-100 text-blue-800 border border-blue-300"
+                            }`}
+                          >
+                            L{esc.level}
+                          </span>
+                          <span className="font-mono text-[11px] font-semibold text-[#172B40]">
+                            {esc.appId}
+                          </span>
+                          <span className="text-[10px] text-[#8290A0]">
+                            ({STAGE_LABELS[esc.stage]})
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#5F6F82] mt-0.5 truncate">{esc.reason}</p>
+                      </div>
+                      <button
+                        onClick={() => notifStore.acknowledgeEscalation(esc.id, "admin-user")}
+                        className="shrink-0 text-[10px] font-medium text-[#163B65] bg-white border border-[#D5DDE6] hover:bg-[#EEF3F8] px-2 py-1 rounded transition-colors"
+                      >
+                        Acknowledge
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Pipeline + Region */}
       <div className="grid gap-4 lg:grid-cols-2">

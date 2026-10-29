@@ -386,6 +386,26 @@ class Store {
     this.persist();
   }
 
+  private onStageTransitionHook?: (appId: string, from: Stage, to: Stage, remarks?: string) => void;
+  private onDeficiencyHook?: (appId: string, desc: string, due: string) => void;
+  private onAssignHook?: (appId: string, toUser: string) => void;
+  private onEVCHook?: (appId: string, date: string, comm: string[]) => void;
+  private onDocUploadHook?: (appId: string, type: string) => void;
+
+  setHooks(hooks: {
+    onStageTransition?: (appId: string, from: Stage, to: Stage, remarks?: string) => void;
+    onDeficiency?: (appId: string, desc: string, due: string) => void;
+    onAssign?: (appId: string, toUser: string) => void;
+    onEVC?: (appId: string, date: string, comm: string[]) => void;
+    onDocUpload?: (appId: string, type: string) => void;
+  }) {
+    if (hooks.onStageTransition) this.onStageTransitionHook = hooks.onStageTransition;
+    if (hooks.onDeficiency) this.onDeficiencyHook = hooks.onDeficiency;
+    if (hooks.onAssign) this.onAssignHook = hooks.onAssign;
+    if (hooks.onEVC) this.onEVCHook = hooks.onEVC;
+    if (hooks.onDocUpload) this.onDocUploadHook = hooks.onDocUpload;
+  }
+
   // ── Retrieval ────────────────────────────────────────────────────────────────
   getInstitution(id: string) {
     return this.institutions.find((i) => i.id === id);
@@ -469,6 +489,13 @@ class Store {
     };
     this.auditLogs.push(auditEntry);
     this.persist();
+    if (this.onStageTransitionHook) {
+      try {
+        this.onStageTransitionHook(appId, from, toStage, remarks);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   raiseDeficiency(
@@ -498,6 +525,13 @@ class Store {
       remarks: description,
     });
     this.persist();
+    if (this.onDeficiencyHook) {
+      try {
+        this.onDeficiencyHook(appId, description, due);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   uploadDocument(
@@ -524,6 +558,13 @@ class Store {
       timestamp: new Date().toISOString(),
     });
     this.persist();
+    if (this.onDocUploadHook) {
+      try {
+        this.onDocUploadHook(appId, type);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   verifyDocument(docId: string, userId: string) {
@@ -581,6 +622,13 @@ class Store {
       timestamp: new Date().toISOString(),
     });
     this.persist();
+    if (this.onAssignHook) {
+      try {
+        this.onAssignHook(appId, toUserId);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   scheduleEVC(appId: string, date: string, committee: string[], userId: string) {
@@ -597,6 +645,13 @@ class Store {
       remarks: `Committee: ${committee.join(", ")}`,
     });
     this.persist();
+    if (this.onEVCHook) {
+      try {
+        this.onEVCHook(appId, date, committee);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 

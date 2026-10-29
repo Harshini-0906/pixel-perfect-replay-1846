@@ -1,9 +1,10 @@
 // ApprovalFlow AI — Main Authenticated Layout
 // Route: /demo/approvalflow  (shell for all sub-pages)
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState, useRef } from "react";
 import { getCurrentDemoUser, signOutDemoUser, DEMO_USERS } from "@/lib/supabase";
 import { afStore, storeEvents } from "@/lib/approval-flow";
+import { notifStore, type AppNotification } from "@/lib/notifications";
 import { useDemoRole } from "@/lib/demo-role-store";
 
 export const Route = createFileRoute("/demo/approvalflow")({
@@ -45,6 +46,10 @@ const ICONS: Record<string, string> = {
   menu: "M4 6h16M4 12h16M4 18h16",
   close: "M6 18L18 6M6 6l12 12",
   chevron: "M9 5l7 7-7 7",
+  bell: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9",
+  check: "M5 13l4 4L19 7",
+  filter:
+    "M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z",
 };
 
 const NAV_ITEMS = [
@@ -81,6 +86,227 @@ function NavBadge({ count }: { count: number }) {
     <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-[#E99A35] text-white text-[10px] font-bold flex items-center justify-center px-1">
       {count}
     </span>
+  );
+}
+
+function NotificationCenter({
+  userRole,
+  userId,
+}: {
+  userRole: string | null;
+  userId?: string | null | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filterType, setFilterType] = useState<string>("ALL");
+  const [onlyUnread, setOnlyUnread] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  // Re-render when store events fire
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const unsub = storeEvents.subscribe(() => setTick((t) => t + 1));
+    return unsub;
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const allUserNotifs = notifStore.getNotificationsForUser(userRole, userId);
+  const unreadCount = allUserNotifs.filter((n) => !n.read).length;
+
+  const filteredNotifs = allUserNotifs.filter((n) => {
+    if (onlyUnread && n.read) return false;
+    if (filterType === "ALL") return true;
+    if (filterType === "SLA") return n.type === "SLA_APPROACHING" || n.type === "SLA_OVERDUE";
+    if (filterType === "ESCALATION") return n.type === "APP_ESCALATED";
+    if (filterType === "STAGE") return n.type === "STAGE_FORWARDED" || n.type === "APP_SUBMITTED";
+    if (filterType === "COMPLIANCE")
+      return n.type === "DEFICIENCY_RAISED" || n.type === "COMPLIANCE_REQUIRED";
+    return true;
+  });
+
+  const getPriorityBadge = (priority: string) => {
+    if (priority === "critical")
+      return (
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-300">
+          CRITICAL
+        </span>
+      );
+    if (priority === "high")
+      return (
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+          HIGH
+        </span>
+      );
+    if (priority === "medium")
+      return (
+        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+          MEDIUM
+        </span>
+      );
+    return (
+      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+        INFO
+      </span>
+    );
+  };
+
+  const handleSelectNotif = (notif: AppNotification) => {
+    notifStore.markAsRead(notif.id);
+    setOpen(false);
+    if (notif.route) {
+      navigate({ to: notif.route });
+    }
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Bell Button */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative p-2 rounded-full hover:bg-[#F0F3F6] text-[#5F6F82] transition-colors focus:outline-none"
+        title="Notifications"
+        aria-label="Notification Centre"
+      >
+        <Icon d={ICONS["bell"] || ""} size={18} />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 min-w-[17px] h-[17px] rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center px-1 border-2 border-white animate-pulse">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {/* Notification Dropdown Panel */}
+      {open && (
+        <div className="absolute right-0 mt-2 w-96 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-xl border border-[#E1E7ED] z-50 overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="px-4 py-3 bg-[#163B65] text-white flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Icon d={ICONS["bell"] || ""} size={14} className="text-[#E99A35]" />
+                <h3 className="text-[13px] font-bold tracking-tight">Notification Centre</h3>
+              </div>
+              <p className="text-[10px] text-white/60 mt-0.5">
+                In-app prototype notifications · {allUserNotifs.length} total
+              </p>
+            </div>
+            {unreadCount > 0 && (
+              <button
+                onClick={() => notifStore.markAllAsRead(userRole, userId)}
+                className="text-[11px] text-[#E99A35] hover:text-white transition-colors underline font-medium"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          {/* Filter Bar */}
+          <div className="p-2 border-b border-[#E1E7ED] bg-[#F5F7FA] flex items-center justify-between gap-1 text-[11px]">
+            <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+              {(["ALL", "SLA", "ESCALATION", "STAGE", "COMPLIANCE"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setFilterType(t)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                    filterType === t
+                      ? "bg-[#163B65] text-white"
+                      : "bg-white text-[#5F6F82] border border-[#E1E7ED] hover:bg-[#EEF3F8]"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-1 text-[10px] text-[#5F6F82] shrink-0 cursor-pointer pl-1">
+              <input
+                type="checkbox"
+                checked={onlyUnread}
+                onChange={(e) => setOnlyUnread(e.target.checked)}
+                className="rounded border-[#D5DDE6] text-[#163B65] text-[10px]"
+              />
+              <span>Unread</span>
+            </label>
+          </div>
+
+          {/* Notifications List */}
+          <div className="max-h-[380px] overflow-y-auto divide-y divide-[#E1E7ED]">
+            {filteredNotifs.length === 0 ? (
+              <div className="py-12 text-center text-[#8290A0]">
+                <Icon
+                  d={ICONS["check"] || ""}
+                  size={24}
+                  className="mx-auto mb-2 opacity-40 text-green-600"
+                />
+                <p className="text-[12px] font-medium text-[#172B40]">All caught up!</p>
+                <p className="text-[11px] mt-0.5">No notifications match your current filters.</p>
+              </div>
+            ) : (
+              filteredNotifs.map((n) => (
+                <div
+                  key={n.id}
+                  onClick={() => handleSelectNotif(n)}
+                  className={`p-3 transition-colors cursor-pointer text-left hover:bg-[#F8FAFC] flex gap-2.5 items-start ${
+                    !n.read ? "bg-blue-50/40" : ""
+                  }`}
+                >
+                  {/* Unread dot */}
+                  <div className="mt-1 shrink-0">
+                    <span
+                      className={`inline-block w-2 h-2 rounded-full ${
+                        !n.read ? "bg-[#E99A35]" : "bg-transparent"
+                      }`}
+                    />
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[11px] font-semibold text-[#172B40] truncate">
+                        {n.title}
+                      </span>
+                      {getPriorityBadge(n.priority)}
+                    </div>
+                    <p className="text-[11px] text-[#5F6F82] line-clamp-2 leading-relaxed">
+                      {n.description}
+                    </p>
+                    <div className="flex items-center justify-between text-[10px] text-[#8290A0] mt-1.5 pt-1 border-t border-[#E1E7ED]/50">
+                      <span className="font-mono bg-[#E1E7ED]/50 px-1 rounded text-[#163B65]">
+                        {n.appId}
+                      </span>
+                      <span>
+                        {new Date(n.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Footer note */}
+          <div className="px-3 py-1.5 bg-[#F5F7FA] border-t border-[#E1E7ED] text-[10px] text-[#8290A0] flex items-center justify-between">
+            <span>Prototype in-app alerts</span>
+            <span>External delivery pending</span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -256,6 +482,9 @@ function ApprovalFlowLayout() {
                 {currentNav?.label ?? "Dashboard"}
               </h1>
             </div>
+
+            {/* Notification Center */}
+            <NotificationCenter userRole={roleStr} userId={user?.id} />
 
             {/* Role badge */}
             {user && (
