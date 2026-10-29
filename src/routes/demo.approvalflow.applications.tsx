@@ -737,16 +737,23 @@ function ApplicationDetail({
               {/* Header Bar */}
               <div className="bg-white rounded border border-[#E1E7ED] p-3 flex flex-wrap items-center justify-between gap-2 shadow-sm">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 text-purple-800 px-3 py-1 text-xs font-semibold border border-purple-200">
-                    <span className="h-2 w-2 rounded-full bg-purple-600 animate-pulse" />
-                    {intel?.providerName ?? "Deterministic Intelligence Engine"}
-                  </span>
+                  {intel?.providerMode === "llm" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-800 px-3 py-1 text-xs font-semibold border border-emerald-300 shadow-sm">
+                      <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+                      Gemini Live ({intel.providerName || "gemini-3.5-flash-lite"})
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-800 px-3 py-1 text-xs font-semibold border border-slate-300">
+                      <span className="h-2 w-2 rounded-full bg-slate-500" />
+                      Rule-Based Demo Mode (Deterministic Fallback)
+                    </span>
+                  )}
                   <span className="text-[11px] text-[#5F6F82]">
                     Mode:{" "}
                     <strong className="text-[#172B40]">
                       {intel?.providerMode === "llm"
-                        ? "LLM Provider (AI-Assisted)"
-                        : "Deterministic Heuristics Engine (Rule-Based Prototype)"}
+                        ? "Gemini Live (Google Gen AI SDK · Cloud-Native)"
+                        : "Rule-Based Demo Mode (Deterministic Heuristics Engine)"}
                     </strong>
                   </span>
                   {intel?.generatedAt && (

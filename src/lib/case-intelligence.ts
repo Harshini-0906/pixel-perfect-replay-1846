@@ -1125,22 +1125,33 @@ export class RuleBasedCaseIntelligenceProvider implements AIProvider {
 // ── Server-Side / LLM Model Provider Wrapper ─────────────────────────────────
 
 export class ServerSideAIProvider implements AIProvider {
-  name = "AI-Assisted LLM Intelligence Provider";
+  name = "Google Gemini Live Intelligence Provider";
   mode = "llm" as const;
   private fallbackProvider = new RuleBasedCaseIntelligenceProvider();
 
   async analyzeCase(context: CaseIntelligenceContext): Promise<CaseIntelligenceResult> {
     try {
-      const env = typeof process !== "undefined" ? process.env : undefined;
-      const apiKey = env ? env["AI_PROVIDER_API_KEY"] || env["GEMINI_API_KEY"] : undefined;
-
-      if (!apiKey) {
-        // Fallback to deterministic rule-based analysis
-        return await this.fallbackProvider.analyzeCase(context);
+      // 1. If running on server (SSR, Node, Vitest, or Nitro server functions)
+      if (typeof window === "undefined") {
+        const { analyzeCaseWithGemini } = await import("./gemini-server");
+        return await analyzeCaseWithGemini(context);
       }
 
-      // When API key is provided, LLM completion call would occur here.
-      // Falls back safely to rule-based engine if anything fails or in demo mode.
+      // 2. If running in browser (client-side), dispatch to server API
+      const res = await fetch("/api/gemini/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ context }),
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as CaseIntelligenceResult;
+        if (data && data.summary && data.attention) {
+          return data;
+        }
+      }
+
+      // Gracefully fall back to rule-based engine if endpoint is unavailable
       return await this.fallbackProvider.analyzeCase(context);
     } catch {
       return await this.fallbackProvider.analyzeCase(context);
@@ -1152,14 +1163,38 @@ export class ServerSideAIProvider implements AIProvider {
     context: CaseIntelligenceContext,
     customInstructions?: string,
   ): Promise<CommunicationDraft> {
-    return this.fallbackProvider.generateDraft(type, context, customInstructions);
+    try {
+      // 1. If running on server
+      if (typeof window === "undefined") {
+        const { generateDraftWithGemini } = await import("./gemini-server");
+        return await generateDraftWithGemini(type, context, customInstructions);
+      }
+
+      // 2. If running in browser
+      const res = await fetch("/api/gemini/draft", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type, context, customInstructions }),
+      });
+
+      if (res.ok) {
+        const draft = (await res.json()) as CommunicationDraft;
+        if (draft && draft.body && draft.subject) {
+          return draft;
+        }
+      }
+
+      return await this.fallbackProvider.generateDraft(type, context, customInstructions);
+    } catch {
+      return await this.fallbackProvider.generateDraft(type, context, customInstructions);
+    }
   }
 }
 
 // ── Global Service Singleton & Factory ────────────────────────────────────────
 
 class CaseIntelligenceService {
-  private activeProvider: AIProvider = new RuleBasedCaseIntelligenceProvider();
+  private activeProvider: AIProvider = new ServerSideAIProvider();
 
   setProvider(provider: AIProvider): void {
     this.activeProvider = provider;
