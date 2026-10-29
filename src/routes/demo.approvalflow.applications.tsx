@@ -151,15 +151,14 @@ function WorkflowTimeline({ currentStage }: { currentStage: AppStage }) {
               <div className="flex flex-col items-center">
                 <div
                   className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all
-                  ${
-                    isDone
+                  ${isDone
                       ? "bg-[#163B65] text-white"
                       : isCurrent
                         ? "bg-[#E99A35] text-white ring-2 ring-[#E99A35]/30 ring-offset-1"
                         : isRejected && idx === mainFlow.length - 1
                           ? "bg-red-500 text-white"
                           : "bg-[#E1E7ED] text-[#8290A0]"
-                  }`}
+                    }`}
                 >
                   {isDone ? "✓" : idx + 1}
                 </div>
@@ -381,11 +380,10 @@ function ApplicationDetail({
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors ${
-                activeTab === tab
-                  ? "border-[#163B65] text-[#163B65]"
-                  : "border-transparent text-[#8290A0] hover:text-[#172B40]"
-              }`}
+              className={`px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors ${activeTab === tab
+                ? "border-[#163B65] text-[#163B65]"
+                : "border-transparent text-[#8290A0] hover:text-[#172B40]"
+                }`}
             >
               {TAB_LABELS[tab]}
             </button>
@@ -460,11 +458,10 @@ function ApplicationDetail({
                         <button
                           key={s}
                           onClick={() => setTransitionStage(s)}
-                          className={`rounded px-3 py-1.5 text-[12px] font-medium border transition-colors ${
-                            transitionStage === s
-                              ? "bg-[#163B65] text-white border-[#163B65]"
-                              : "border-[#D5DDE6] text-[#5F6F82] hover:border-[#163B65] hover:text-[#163B65]"
-                          }`}
+                          className={`rounded px-3 py-1.5 text-[12px] font-medium border transition-colors ${transitionStage === s
+                            ? "bg-[#163B65] text-white border-[#163B65]"
+                            : "border-[#D5DDE6] text-[#5F6F82] hover:border-[#163B65] hover:text-[#163B65]"
+                            }`}
                         >
                           → {STAGE_LABELS[s]}
                         </button>
@@ -868,7 +865,7 @@ function ApplicationsPage() {
       }
       return true;
     });
-  }, [search, filterStage, filterRegion, filterType, roleStr, tick]);
+  }, [search, filterStage, filterRegion, filterType, role, tick]);
 
   const regions = Array.from(new Set(afStore.applications.map((a) => a.region)));
   const stats = afStore.getStats();
@@ -1144,5 +1141,8 @@ function ActivityTimeline({ appId }: { appId: string }) {
         ))}
       </div>
     </div>
+  );
+}
+    </div >
   );
 }
