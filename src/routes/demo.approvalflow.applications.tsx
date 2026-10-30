@@ -29,6 +29,11 @@ import {
   type CommunicationDraft,
   type CommunicationDraftType,
 } from "@/lib/case-intelligence";
+import {
+  downloadDocumentToComputer,
+  openDocumentInNewTab,
+  getDocumentViewUrl,
+} from "@/lib/document-preview";
 
 export const Route = createFileRoute("/demo/approvalflow/applications")({
   ssr: false,
@@ -220,7 +225,9 @@ function ApplicationDetail({
   const [uploadName, setUploadName] = useState("");
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewMode, setPreviewMode] = useState<"file" | "seal">("file");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadedFileData, setUploadedFileData] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [comment, setComment] = useState("");
   const [evcDate, setEvcDate] = useState("");
@@ -302,6 +309,19 @@ function ApplicationDetail({
   };
 
   const inst = afStore.getInstitution(app.institutionId);
+  const previewViewInfo = useMemo(() => {
+    if (!previewDoc) return null;
+    return getDocumentViewUrl(previewDoc, app, inst?.name, inst?.aicteId);
+  }, [previewDoc, app, inst]);
+
+  useEffect(() => {
+    return () => {
+      if (previewViewInfo?.isBlob) {
+        URL.revokeObjectURL(previewViewInfo.url);
+      }
+    };
+  }, [previewViewInfo]);
+
   const docs = afStore.getDocumentsForApp(app.id);
   const tasks = afStore.getTasksForApp(app.id);
   const auditLogs = afStore.getAuditLogsForApp(app.id);
@@ -365,6 +385,11 @@ function ApplicationDetail({
       if (!uploadName) {
         setUploadName(file.name);
       }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setUploadedFileData(ev.target?.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -374,10 +399,11 @@ function ApplicationDetail({
     const sizeToUse = selectedFile
       ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`
       : "1.45 MB";
-    afStore.uploadDocument(app.id, uploadType, nameToUse, userId, undefined, sizeToUse);
+    afStore.uploadDocument(app.id, uploadType, nameToUse, userId, undefined, sizeToUse, uploadedFileData);
     notify(`${nameToUse} uploaded successfully`);
     setUploadName("");
     setSelectedFile(null);
+    setUploadedFileData(undefined);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setShowUploadForm(false);
     onRefresh();
@@ -1535,9 +1561,12 @@ function ApplicationDetail({
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {/* 👁 View Document Button */}
                         <button
-                          onClick={() => setPreviewDoc(doc)}
+                          onClick={() => {
+                            setPreviewMode("file");
+                            setPreviewDoc(doc);
+                          }}
                           className="rounded border border-[#163B65] text-[#163B65] hover:bg-[#163B65] hover:text-white font-semibold text-[11px] px-3 py-1.5 transition-colors flex items-center gap-1 shadow-sm"
-                          title="Preview Document Details and Official Verification Stamp"
+                          title="View and Open Document File"
                         >
                           <span>👁</span> View Document
                         </button>
@@ -1545,12 +1574,13 @@ function ApplicationDetail({
                         {/* ⬇ Download Copy Button */}
                         <button
                           onClick={() => {
-                            notify(`Downloading copy of ${doc.fileName}...`);
+                            downloadDocumentToComputer(doc, app, inst?.name, inst?.aicteId);
+                            notify(`Downloaded ${doc.fileName} to your computer.`);
                           }}
-                          className="rounded border border-[#D5DDE6] bg-white hover:bg-slate-50 text-[#172B40] text-[11px] font-medium px-2.5 py-1.5 transition-colors"
-                          title="Download Document"
+                          className="rounded border border-[#D5DDE6] bg-white hover:bg-slate-50 text-[#172B40] text-[11px] font-medium px-2.5 py-1.5 transition-colors flex items-center gap-1 shadow-xs"
+                          title="Download Document to Computer"
                         >
-                          ⬇ Download
+                          <span>⬇</span> Download
                         </button>
 
                         {/* Officer Verify Action */}
@@ -1648,144 +1678,225 @@ function ApplicationDetail({
       </div>
 
       {/* Official AICTE Document Preview & Verification Modal */}
-      {previewDoc && (
+      {previewDoc && previewViewInfo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-[#CBD5E1]">
+          <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-[#CBD5E1]">
             {/* Modal Header */}
             <div className="bg-[#163B65] text-white px-5 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="text-xl">📄</span>
                 <div>
-                  <h3 className="font-bold text-sm leading-tight">
-                    {previewDoc.type.replace(/_/g, " ")} — Official Document Preview
+                  <h3 className="font-bold text-sm leading-tight flex items-center gap-2">
+                    <span>{previewDoc.type.replace(/_/g, " ")} — Document File View</span>
+                    {previewDoc.verified && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.2 rounded font-semibold">
+                        Verified
+                      </span>
+                    )}
                   </h3>
                   <p className="text-[10px] text-white/70 font-mono">
-                    Ref: {previewDoc.fileName} · App ID: {app.id}
+                    Ref: {previewDoc.fileName} · App ID: {app.id} · {previewDoc.fileSize || "1.4 MB"}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setPreviewDoc(null)}
-                className="text-white/70 hover:text-white text-lg font-bold p-1 leading-none"
-              >
-                ✕
-              </button>
+
+              <div className="flex items-center gap-2">
+                {/* ↗ Open File in New Tab Button */}
+                <button
+                  onClick={() => openDocumentInNewTab(previewDoc, app, inst?.name, inst?.aicteId)}
+                  className="rounded bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-2.5 py-1.5 transition-colors flex items-center gap-1 border border-white/20"
+                  title="Open actual document file in a new browser tab"
+                >
+                  <span>↗</span> Open in New Tab
+                </button>
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="text-white/70 hover:text-white text-lg font-bold p-1 leading-none ml-1"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* View Mode Toggle Sub-bar */}
+            <div className="bg-[#F1F5F9] border-b border-[#CBD5E1] px-5 py-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 bg-white p-1 rounded border border-[#CBD5E1]">
+                <button
+                  onClick={() => setPreviewMode("file")}
+                  className={`text-xs px-3 py-1 rounded font-semibold transition-colors flex items-center gap-1.5 ${
+                    previewMode === "file"
+                      ? "bg-[#163B65] text-white shadow-xs"
+                      : "text-[#5F6F82] hover:bg-slate-100"
+                  }`}
+                >
+                  <span>📄</span> Document File View
+                </button>
+                <button
+                  onClick={() => setPreviewMode("seal")}
+                  className={`text-xs px-3 py-1 rounded font-semibold transition-colors flex items-center gap-1.5 ${
+                    previewMode === "seal"
+                      ? "bg-[#163B65] text-white shadow-xs"
+                      : "text-[#5F6F82] hover:bg-slate-100"
+                  }`}
+                >
+                  <span>🛡</span> Regulatory Seal & Checksum
+                </button>
+              </div>
+
+              <div className="text-[11px] text-[#5F6F82] hidden sm:flex items-center gap-1 font-mono">
+                <span>SHA-256 Verified Tamper-Evident Record</span>
+              </div>
             </div>
 
             {/* Document Content Canvas */}
-            <div className="p-6 overflow-y-auto space-y-4 bg-[#F8FAFC]">
-              {/* Official AICTE Certificate Container */}
-              <div className="bg-white rounded border-2 border-[#163B65]/20 p-6 shadow-sm relative overflow-hidden">
-                {/* Watermark seal */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04]">
-                  <span className="text-9xl font-black text-[#163B65]">AICTE</span>
-                </div>
+            <div className="p-5 overflow-y-auto space-y-4 bg-[#F8FAFC] flex-1">
+              {previewMode === "file" ? (
+                /* LIVE DOCUMENT FILE VIEWER */
+                <div className="space-y-2">
+                  <div className="bg-white rounded border border-[#CBD5E1] p-2 flex items-center justify-between text-xs text-[#5F6F82] shadow-xs">
+                    <span className="font-semibold text-[#163B65] flex items-center gap-1.5 truncate">
+                      <span>📁</span> {previewDoc.fileName}
+                    </span>
+                    <button
+                      onClick={() => openDocumentInNewTab(previewDoc, app, inst?.name, inst?.aicteId)}
+                      className="text-xs text-blue-700 hover:text-blue-900 font-semibold hover:underline flex items-center gap-1 shrink-0"
+                    >
+                      <span>↗</span> Open file in full browser tab
+                    </button>
+                  </div>
 
-                {/* Top Certificate Header */}
-                <div className="text-center border-b border-[#CBD5E1] pb-4 mb-4">
-                  <p className="text-[10px] font-bold tracking-widest text-[#8290A0] uppercase">
-                    GOVERNMENT OF INDIA · MINISTRY OF EDUCATION
-                  </p>
-                  <h4 className="text-base font-extrabold text-[#163B65] mt-0.5">
-                    ALL INDIA COUNCIL FOR TECHNICAL EDUCATION
-                  </h4>
-                  <p className="text-[11px] text-[#5F6F82]">
-                    Approval Process Regulatory Repository — Document Verification Seal
-                  </p>
-                </div>
-
-                {/* Document Metadata Grid */}
-                <div className="grid grid-cols-2 gap-3 text-xs mb-4 bg-[#F5F8FC] p-3 rounded border border-blue-100">
-                  <div>
-                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
-                      Institution:
-                    </span>
-                    <span className="font-bold text-[#172B40]">{inst?.name || "Institution"}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
-                      AICTE Permanent ID:
-                    </span>
-                    <span className="font-mono text-[#172B40] font-semibold">
-                      {inst?.aicteId || "AICTE-2024-0001"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
-                      Application ID:
-                    </span>
-                    <span className="font-mono text-[#163B65] font-bold">{app.id}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
-                      Document Type:
-                    </span>
-                    <span className="font-semibold text-[#172B40]">
-                      {previewDoc.type.replace(/_/g, " ")}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
-                      File Name:
-                    </span>
-                    <span className="font-mono text-[11px] text-[#5F6F82]">
-                      {previewDoc.fileName}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
-                      Document Size & Status:
-                    </span>
-                    <span className="text-[11px] font-semibold">
-                      {previewDoc.fileSize || "1.4 MB"} ·{" "}
-                      {previewDoc.verified ? (
-                        <span className="text-emerald-700 font-bold">✓ Verified</span>
-                      ) : (
-                        <span className="text-amber-700 font-medium">Pending Review</span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Simulated Extracted / Verified Content */}
-                <div className="border border-[#E2E8F0] rounded p-4 bg-white text-xs space-y-2">
-                  <p className="font-bold text-[#163B65] border-b border-[#E2E8F0] pb-1">
-                    Regulatory Verification Summary
-                  </p>
-                  <p className="text-[#334155] leading-relaxed">
-                    This document was officially submitted via the AICTE Institutional Approval
-                    Portal for the academic approval cycle 2024–27. The document has undergone
-                    automated checksum validation and OCR verification.
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-                    <div className="bg-[#F8FAFC] p-2 rounded">
-                      <span className="text-[#64748B] block text-[10px]">Verification Hash:</span>
-                      <code className="text-[#0F172A] font-mono text-[10px]">
-                        sha256:7f8a9b2c...4d5e
-                      </code>
+                  {previewViewInfo.mimeType.startsWith("image/") ? (
+                    <div className="bg-slate-900/5 rounded-lg border border-[#CBD5E1] p-4 flex items-center justify-center min-h-[500px]">
+                      <img
+                        src={previewViewInfo.url}
+                        alt={previewDoc.fileName}
+                        className="max-h-[560px] w-auto max-w-full rounded object-contain border border-[#CBD5E1] shadow-sm bg-white"
+                      />
                     </div>
-                    <div className="bg-[#F8FAFC] p-2 rounded">
-                      <span className="text-[#64748B] block text-[10px]">Portal Timestamp:</span>
-                      <span className="text-[#0F172A] font-semibold text-[10px]">
-                        {previewDoc.uploadedAt
-                          ? new Date(previewDoc.uploadedAt).toLocaleString("en-IN")
-                          : "15 Oct 2026, 11:30 AM IST"}
+                  ) : (
+                    <div className="rounded-lg border border-[#CBD5E1] overflow-hidden bg-white shadow-xs">
+                      <iframe
+                        src={previewViewInfo.url}
+                        className="w-full h-[560px] border-0"
+                        title={previewDoc.fileName}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* OFFICIAL REGULATORY SEAL & CHECKSUM */
+                <div className="bg-white rounded border-2 border-[#163B65]/20 p-6 shadow-sm relative overflow-hidden">
+                  {/* Watermark seal */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04]">
+                    <span className="text-9xl font-black text-[#163B65]">AICTE</span>
+                  </div>
+
+                  {/* Top Certificate Header */}
+                  <div className="text-center border-b border-[#CBD5E1] pb-4 mb-4">
+                    <p className="text-[10px] font-bold tracking-widest text-[#8290A0] uppercase">
+                      GOVERNMENT OF INDIA · MINISTRY OF EDUCATION
+                    </p>
+                    <h4 className="text-base font-extrabold text-[#163B65] mt-0.5">
+                      ALL INDIA COUNCIL FOR TECHNICAL EDUCATION
+                    </h4>
+                    <p className="text-[11px] text-[#5F6F82]">
+                      Approval Process Regulatory Repository — Document Verification Seal
+                    </p>
+                  </div>
+
+                  {/* Document Metadata Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-xs mb-4 bg-[#F5F8FC] p-3 rounded border border-blue-100">
+                    <div>
+                      <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                        Institution:
+                      </span>
+                      <span className="font-bold text-[#172B40]">{inst?.name || "Institution"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                        AICTE Permanent ID:
+                      </span>
+                      <span className="font-mono text-[#172B40] font-semibold">
+                        {inst?.aicteId || "AICTE-2024-0001"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                        Application ID:
+                      </span>
+                      <span className="font-mono text-[#163B65] font-bold">{app.id}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                        Document Type:
+                      </span>
+                      <span className="font-semibold text-[#172B40]">
+                        {previewDoc.type.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                        File Name:
+                      </span>
+                      <span className="font-mono text-[11px] text-[#5F6F82]">
+                        {previewDoc.fileName}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                        Document Size & Status:
+                      </span>
+                      <span className="text-[11px] font-semibold">
+                        {previewDoc.fileSize || "1.4 MB"} ·{" "}
+                        {previewDoc.verified ? (
+                          <span className="text-emerald-700 font-bold">✓ Verified</span>
+                        ) : (
+                          <span className="text-amber-700 font-medium">Pending Review</span>
+                        )}
                       </span>
                     </div>
                   </div>
-                </div>
 
-                {previewDoc.flags && previewDoc.flags.length > 0 && (
-                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900">
-                    <p className="font-bold text-amber-800">Scrutiny Observations / Flags:</p>
-                    <ul className="list-disc list-inside mt-1 space-y-0.5">
-                      {previewDoc.flags.map((flag, idx) => (
-                        <li key={idx}>{flag}</li>
-                      ))}
-                    </ul>
+                  {/* Simulated Extracted / Verified Content */}
+                  <div className="border border-[#E2E8F0] rounded p-4 bg-white text-xs space-y-2">
+                    <p className="font-bold text-[#163B65] border-b border-[#E2E8F0] pb-1">
+                      Regulatory Verification Summary
+                    </p>
+                    <p className="text-[#334155] leading-relaxed">
+                      This document was officially submitted via the AICTE Institutional Approval
+                      Portal for the academic approval cycle 2024–27. The document has undergone
+                      automated checksum validation and OCR verification.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                      <div className="bg-[#F8FAFC] p-2 rounded">
+                        <span className="text-[#64748B] block text-[10px]">Verification Hash:</span>
+                        <code className="text-[#0F172A] font-mono text-[10px]">
+                          sha256:7f8a9b2c...4d5e
+                        </code>
+                      </div>
+                      <div className="bg-[#F8FAFC] p-2 rounded">
+                        <span className="text-[#64748B] block text-[10px]">Portal Timestamp:</span>
+                        <span className="text-[#0F172A] font-semibold text-[10px]">
+                          {previewDoc.uploadedAt
+                            ? new Date(previewDoc.uploadedAt).toLocaleString("en-IN")
+                            : "15 Oct 2026, 11:30 AM IST"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {previewDoc.flags && previewDoc.flags.length > 0 && (
+                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900">
+                      <p className="font-bold text-amber-800">Scrutiny Observations / Flags:</p>
+                      <ul className="list-disc list-inside mt-1 space-y-0.5">
+                        {previewDoc.flags.map((flag, idx) => (
+                          <li key={idx}>{flag}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -1811,15 +1922,16 @@ function ApplicationDetail({
                   )}
                 <button
                   onClick={() => {
-                    notify(`Downloading copy of ${previewDoc.fileName}...`);
+                    downloadDocumentToComputer(previewDoc, app, inst?.name, inst?.aicteId);
+                    notify(`Downloaded ${previewDoc.fileName} to your computer.`);
                   }}
-                  className="rounded border border-[#D5DDE6] bg-white hover:bg-slate-50 text-[#172B40] font-medium text-xs px-3 py-1.5 transition-colors"
+                  className="rounded border border-[#163B65] bg-[#163B65] hover:bg-[#102F52] text-white font-semibold text-xs px-3.5 py-1.5 transition-colors flex items-center gap-1 shadow-xs"
                 >
-                  ⬇ Download Copy
+                  <span>⬇</span> Download to Computer
                 </button>
                 <button
                   onClick={() => setPreviewDoc(null)}
-                  className="rounded bg-[#163B65] hover:bg-[#102F52] text-white font-semibold text-xs px-4 py-1.5 transition-colors"
+                  className="rounded border border-[#D5DDE6] bg-white hover:bg-slate-50 text-[#172B40] font-medium text-xs px-4 py-1.5 transition-colors"
                 >
                   Close
                 </button>
