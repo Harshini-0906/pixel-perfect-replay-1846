@@ -341,7 +341,7 @@ export class RuleBasedCaseIntelligenceProvider implements AIProvider {
 
     const executiveNarrative =
       `Application ${app.id} for ${institutionName} (${institutionAicteId}) is currently in the ${stageDesc} stage. ` +
-      `The case is assigned to officer ${app.assignedTo ?? "Unassigned"} under the ${app.workflowTemplate.replace(/_/g, " ")} workflow. ` +
+      `The case is assigned to officer ${app.assignedTo ?? "Unassigned"} under the ${(app.workflowTemplate || "scrutinyEvc").replace(/_/g, " ")} workflow. ` +
       `SLA status is ${slaDesc}. ` +
       (openDeficiencies.length > 0
         ? `There are ${openDeficiencies.length} unresolved deficiencies requiring institutional remediation. `

@@ -1,8 +1,9 @@
 // ApprovalFlow AI — Applications Management
 // Route: /demo/approvalflow/applications
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useDemoRole } from "@/lib/demo-role-store";
+import { getCurrentDemoUser } from "@/lib/supabase";
 import {
   afStore,
   storeEvents,
@@ -16,6 +17,7 @@ import {
   STAGE_TRANSITIONS,
   APP_TYPE_LABELS,
   type Application,
+  type Document,
   type Stage as AppStage,
   type AppType,
   type DocType,
@@ -217,6 +219,9 @@ function ApplicationDetail({
   const [uploadType, setUploadType] = useState<DocType>("LAND_DOC");
   const [uploadName, setUploadName] = useState("");
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [comment, setComment] = useState("");
   const [evcDate, setEvcDate] = useState("");
   const [conditionTitle, setConditionTitle] = useState("");
@@ -353,11 +358,27 @@ function ApplicationDetail({
     onRefresh();
   };
 
+  const handleFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      if (!uploadName) {
+        setUploadName(file.name);
+      }
+    }
+  };
+
   const doUpload = () => {
-    if (!uploadName) return notify("Please enter the file name");
-    afStore.uploadDocument(app.id, uploadType, uploadName, userId);
-    notify(`${uploadName} uploaded successfully`);
+    const nameToUse =
+      uploadName.trim() || selectedFile?.name || `${uploadType.toLowerCase()}_document.pdf`;
+    const sizeToUse = selectedFile
+      ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`
+      : "1.45 MB";
+    afStore.uploadDocument(app.id, uploadType, nameToUse, userId, undefined, sizeToUse);
+    notify(`${nameToUse} uploaded successfully`);
     setUploadName("");
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setShowUploadForm(false);
     onRefresh();
   };
@@ -837,7 +858,8 @@ function ApplicationDetail({
                                     : "bg-emerald-600 text-white"
                             }`}
                           >
-                            Attention Tier: {intel.attention.tier.replace(/_/g, " ")}
+                            Attention Tier:{" "}
+                            {(intel.attention.tier || "STANDARD").replace(/_/g, " ")}
                           </span>
                           <span className="text-xs font-semibold text-[#172B40] bg-white px-2 py-0.5 rounded border border-[#E1E7ED]">
                             Heuristic Risk Score: {intel.attention.score}/100
@@ -1099,7 +1121,9 @@ function ApplicationDetail({
                             <div className="flex flex-wrap items-center justify-between gap-1.5">
                               <div className="flex items-center gap-2">
                                 <span className="rounded bg-[#163B65] text-white px-2 py-0.5 text-[10px] font-semibold">
-                                  {rec.actionType.replace(/_/g, " ").toUpperCase()}
+                                  {(rec.actionType || "review_document")
+                                    .replace(/_/g, " ")
+                                    .toUpperCase()}
                                 </span>
                                 {rec.targetStage && (
                                   <span className="rounded bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 text-[10px] font-medium">
@@ -1336,100 +1360,214 @@ function ApplicationDetail({
           {activeTab === "docs" && (
             <div className="bg-white rounded border border-[#E1E7ED]">
               <div className="px-4 py-2.5 border-b border-[#E1E7ED] bg-[#F5F7FA] flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82]">
-                  Uploaded Documents
-                </p>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#5F6F82]">
+                    Uploaded Documents & Verification ({docs.length})
+                  </p>
+                  <p className="text-[10px] text-[#8290A0]">
+                    Official supporting records uploaded for regulatory scrutiny
+                  </p>
+                </div>
                 {canEdit && (
                   <button
                     onClick={() => setShowUploadForm(!showUploadForm)}
-                    className="text-[11px] text-[#163B65] underline hover:no-underline"
+                    className="rounded bg-[#163B65] hover:bg-[#102F52] text-white font-semibold text-[11px] px-3 py-1.5 transition-colors flex items-center gap-1.5"
                   >
-                    {showUploadForm ? "Cancel" : "+ Upload Document"}
+                    {showUploadForm ? "✕ Close Form" : "⬆ Upload Document"}
                   </button>
                 )}
               </div>
 
               {showUploadForm && canEdit && (
-                <div className="p-4 border-b border-[#E1E7ED] bg-blue-50 space-y-2">
-                  <select
-                    className="w-full rounded border border-[#D5DDE6] bg-white px-3 py-2 text-[13px] text-[#172B40]"
-                    value={uploadType}
-                    onChange={(e) => setUploadType(e.target.value as DocType)}
-                  >
-                    {(
-                      [
-                        "LAND_DOC",
-                        "BUILDING_PLAN",
-                        "OCC_CERT",
-                        "FIRE_NOC",
-                        "NOC_STATE",
-                        "AFFIDAVIT",
-                        "FDR",
-                        "LEASE_RENEWAL",
-                        "FACULTY_LIST",
-                      ] as DocType[]
-                    ).map((t) => (
-                      <option key={t} value={t}>
-                        {t.replace(/_/g, " ")}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="w-full rounded border border-[#D5DDE6] bg-white px-3 py-2 text-[13px] text-[#172B40] focus:outline-none focus:ring-2 focus:ring-[#163B65]/20"
-                    placeholder="File name (e.g. land_certificate.pdf)"
-                    value={uploadName}
-                    onChange={(e) => setUploadName(e.target.value)}
-                  />
-                  <button
-                    className="rounded bg-[#163B65] hover:bg-[#102F52] text-white font-semibold text-[12px] px-4 py-2 transition-colors"
-                    onClick={doUpload}
-                  >
-                    Upload Document
-                  </button>
+                <div className="p-4 border-b border-[#E1E7ED] bg-[#F8FAFC] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-[#163B65]">
+                      Upload Institutional Document
+                    </p>
+                    <span className="text-[10px] text-[#8290A0]">
+                      Supported: PDF, JPG, PNG, DOCX (Max 25MB)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-[#5F6F82] block mb-1">
+                        Document Classification:
+                      </label>
+                      <select
+                        className="w-full rounded border border-[#D5DDE6] bg-white px-3 py-2 text-xs text-[#172B40] font-medium"
+                        value={uploadType}
+                        onChange={(e) => setUploadType(e.target.value as DocType)}
+                      >
+                        {(
+                          [
+                            "LAND_DOC",
+                            "BUILDING_PLAN",
+                            "OCC_CERT",
+                            "FIRE_NOC",
+                            "NOC_STATE",
+                            "AFFIDAVIT",
+                            "FDR",
+                            "LEASE_RENEWAL",
+                            "FACULTY_LIST",
+                          ] as DocType[]
+                        ).map((t) => (
+                          <option key={t} value={t}>
+                            {t.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wider text-[#5F6F82] block mb-1">
+                        Select Document File:
+                      </label>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChosen}
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                        className="w-full rounded border border-[#D5DDE6] bg-white px-2 py-1.5 text-xs text-[#172B40] file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[11px] file:font-semibold file:bg-[#163B65] file:text-white hover:file:bg-[#102F52]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-[#5F6F82] block mb-1">
+                      Document Title / File Name:
+                    </label>
+                    <input
+                      className="w-full rounded border border-[#D5DDE6] bg-white px-3 py-2 text-xs text-[#172B40] focus:outline-none focus:ring-2 focus:ring-[#163B65]/20"
+                      placeholder="e.g. land_registration_deed_2026.pdf"
+                      value={uploadName}
+                      onChange={(e) => setUploadName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUploadForm(false);
+                        setSelectedFile(null);
+                        setUploadName("");
+                      }}
+                      className="rounded border border-[#D5DDE6] bg-white px-3 py-1.5 text-xs font-medium text-[#5F6F82] hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="rounded bg-[#163B65] hover:bg-[#102F52] text-white font-semibold text-xs px-4 py-1.5 transition-colors flex items-center gap-1.5"
+                      onClick={doUpload}
+                    >
+                      <span>⬆</span> Confirm & Upload Document
+                    </button>
+                  </div>
                 </div>
               )}
 
               {docs.length === 0 ? (
-                <p className="p-8 text-center text-[13px] text-[#8290A0]">
-                  No documents have been uploaded for this application.
-                </p>
+                <div className="p-12 text-center text-[#8290A0] space-y-2">
+                  <div className="text-3xl">📄</div>
+                  <p className="text-[13px] font-medium text-[#172B40]">
+                    No documents uploaded yet
+                  </p>
+                  <p className="text-xs">
+                    Institutional representatives can upload mandatory Annexure documents here.
+                  </p>
+                </div>
               ) : (
                 <div className="divide-y divide-[#E1E7ED]">
                   {docs.map((doc) => (
                     <div
                       key={doc.id}
-                      className={`flex items-start justify-between px-4 py-3 ${doc.verified ? "bg-green-50" : ""}`}
+                      className={`p-3.5 flex flex-wrap items-center justify-between gap-3 transition-colors ${
+                        doc.verified ? "bg-emerald-50/30" : "hover:bg-[#F9FAFB]"
+                      }`}
                     >
-                      <div>
-                        <p className="font-semibold text-[13px] text-[#172B40]">
-                          {doc.type.replace(/_/g, " ")}
-                        </p>
-                        <p className="text-[11px] text-[#8290A0] font-mono">{doc.fileName}</p>
-                        {doc.flags?.map((f, i) => (
-                          <p key={i} className="text-[10px] text-amber-600 mt-0.5">
-                            ⚠ {f}
-                          </p>
-                        ))}
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className="h-9 w-9 rounded bg-[#163B65]/10 text-[#163B65] flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                          PDF
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-xs text-[#172B40]">
+                              {doc.type.replace(/_/g, " ")}
+                            </p>
+                            {doc.verified ? (
+                              <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 border border-emerald-300 px-2 py-0.2 rounded-full inline-flex items-center gap-1">
+                                ✓ Verified
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.2 rounded-full font-medium">
+                                Pending Verification
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px] text-[#5F6F82] mt-0.5 flex-wrap font-mono">
+                            <span>📄 {doc.fileName}</span>
+                            <span>•</span>
+                            <span>{doc.fileSize || "1.4 MB"}</span>
+                            <span>•</span>
+                            <span>
+                              Uploaded:{" "}
+                              {doc.uploadedAt
+                                ? new Date(doc.uploadedAt).toLocaleDateString("en-IN")
+                                : "15 Oct 2026"}
+                            </span>
+                          </div>
+                          {doc.flags && doc.flags.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {doc.flags.map((f, i) => (
+                                <span
+                                  key={i}
+                                  className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded"
+                                >
+                                  ⚠ {f}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                        {doc.verified ? (
-                          <span className="text-[11px] text-green-700 font-semibold bg-green-100 border border-green-200 px-2 py-0.5 rounded">
-                            ✓ Verified
-                          </span>
-                        ) : canEdit ? (
-                          <button
-                            className="text-[11px] bg-[#163B65] hover:bg-[#102F52] text-white font-semibold px-3 py-1 rounded transition-colors"
-                            onClick={() => {
-                              afStore.verifyDocument(doc.id, userId);
-                              notify("Document verified");
-                              onRefresh();
-                            }}
-                          >
-                            Verify
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-amber-600 font-medium">Pending</span>
-                        )}
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* 👁 View Document Button */}
+                        <button
+                          onClick={() => setPreviewDoc(doc)}
+                          className="rounded border border-[#163B65] text-[#163B65] hover:bg-[#163B65] hover:text-white font-semibold text-[11px] px-3 py-1.5 transition-colors flex items-center gap-1 shadow-sm"
+                          title="Preview Document Details and Official Verification Stamp"
+                        >
+                          <span>👁</span> View Document
+                        </button>
+
+                        {/* ⬇ Download Copy Button */}
+                        <button
+                          onClick={() => {
+                            notify(`Downloading copy of ${doc.fileName}...`);
+                          }}
+                          className="rounded border border-[#D5DDE6] bg-white hover:bg-slate-50 text-[#172B40] text-[11px] font-medium px-2.5 py-1.5 transition-colors"
+                          title="Download Document"
+                        >
+                          ⬇ Download
+                        </button>
+
+                        {/* Officer Verify Action */}
+                        {!doc.verified &&
+                          canEdit &&
+                          (roleStr === "aicte_office" || roleStr === "admin") && (
+                            <button
+                              className="text-[11px] bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-3 py-1.5 rounded transition-colors shadow-sm"
+                              onClick={() => {
+                                afStore.verifyDocument(doc.id, userId);
+                                notify(`Document "${doc.fileName}" verified successfully.`);
+                                onRefresh();
+                              }}
+                            >
+                              ✓ Mark Verified
+                            </button>
+                          )}
                       </div>
                     </div>
                   ))}
@@ -1508,6 +1646,188 @@ function ApplicationDetail({
           )}
         </div>
       </div>
+
+      {/* Official AICTE Document Preview & Verification Modal */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-[#CBD5E1]">
+            {/* Modal Header */}
+            <div className="bg-[#163B65] text-white px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">📄</span>
+                <div>
+                  <h3 className="font-bold text-sm leading-tight">
+                    {previewDoc.type.replace(/_/g, " ")} — Official Document Preview
+                  </h3>
+                  <p className="text-[10px] text-white/70 font-mono">
+                    Ref: {previewDoc.fileName} · App ID: {app.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPreviewDoc(null)}
+                className="text-white/70 hover:text-white text-lg font-bold p-1 leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Document Content Canvas */}
+            <div className="p-6 overflow-y-auto space-y-4 bg-[#F8FAFC]">
+              {/* Official AICTE Certificate Container */}
+              <div className="bg-white rounded border-2 border-[#163B65]/20 p-6 shadow-sm relative overflow-hidden">
+                {/* Watermark seal */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04]">
+                  <span className="text-9xl font-black text-[#163B65]">AICTE</span>
+                </div>
+
+                {/* Top Certificate Header */}
+                <div className="text-center border-b border-[#CBD5E1] pb-4 mb-4">
+                  <p className="text-[10px] font-bold tracking-widest text-[#8290A0] uppercase">
+                    GOVERNMENT OF INDIA · MINISTRY OF EDUCATION
+                  </p>
+                  <h4 className="text-base font-extrabold text-[#163B65] mt-0.5">
+                    ALL INDIA COUNCIL FOR TECHNICAL EDUCATION
+                  </h4>
+                  <p className="text-[11px] text-[#5F6F82]">
+                    Approval Process Regulatory Repository — Document Verification Seal
+                  </p>
+                </div>
+
+                {/* Document Metadata Grid */}
+                <div className="grid grid-cols-2 gap-3 text-xs mb-4 bg-[#F5F8FC] p-3 rounded border border-blue-100">
+                  <div>
+                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                      Institution:
+                    </span>
+                    <span className="font-bold text-[#172B40]">{inst?.name || "Institution"}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                      AICTE Permanent ID:
+                    </span>
+                    <span className="font-mono text-[#172B40] font-semibold">
+                      {inst?.aicteId || "AICTE-2024-0001"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                      Application ID:
+                    </span>
+                    <span className="font-mono text-[#163B65] font-bold">{app.id}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                      Document Type:
+                    </span>
+                    <span className="font-semibold text-[#172B40]">
+                      {previewDoc.type.replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                      File Name:
+                    </span>
+                    <span className="font-mono text-[11px] text-[#5F6F82]">
+                      {previewDoc.fileName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-[#8290A0] uppercase block">
+                      Document Size & Status:
+                    </span>
+                    <span className="text-[11px] font-semibold">
+                      {previewDoc.fileSize || "1.4 MB"} ·{" "}
+                      {previewDoc.verified ? (
+                        <span className="text-emerald-700 font-bold">✓ Verified</span>
+                      ) : (
+                        <span className="text-amber-700 font-medium">Pending Review</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Simulated Extracted / Verified Content */}
+                <div className="border border-[#E2E8F0] rounded p-4 bg-white text-xs space-y-2">
+                  <p className="font-bold text-[#163B65] border-b border-[#E2E8F0] pb-1">
+                    Regulatory Verification Summary
+                  </p>
+                  <p className="text-[#334155] leading-relaxed">
+                    This document was officially submitted via the AICTE Institutional Approval
+                    Portal for the academic approval cycle 2024–27. The document has undergone
+                    automated checksum validation and OCR verification.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                    <div className="bg-[#F8FAFC] p-2 rounded">
+                      <span className="text-[#64748B] block text-[10px]">Verification Hash:</span>
+                      <code className="text-[#0F172A] font-mono text-[10px]">
+                        sha256:7f8a9b2c...4d5e
+                      </code>
+                    </div>
+                    <div className="bg-[#F8FAFC] p-2 rounded">
+                      <span className="text-[#64748B] block text-[10px]">Portal Timestamp:</span>
+                      <span className="text-[#0F172A] font-semibold text-[10px]">
+                        {previewDoc.uploadedAt
+                          ? new Date(previewDoc.uploadedAt).toLocaleString("en-IN")
+                          : "15 Oct 2026, 11:30 AM IST"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {previewDoc.flags && previewDoc.flags.length > 0 && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900">
+                    <p className="font-bold text-amber-800">Scrutiny Observations / Flags:</p>
+                    <ul className="list-disc list-inside mt-1 space-y-0.5">
+                      {previewDoc.flags.map((flag, idx) => (
+                        <li key={idx}>{flag}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-white border-t border-[#CBD5E1] px-5 py-3 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-[#64748B]">
+                AICTE Official Repository · Document ID: {previewDoc.id}
+              </span>
+              <div className="flex items-center gap-2">
+                {!previewDoc.verified &&
+                  canEdit &&
+                  (roleStr === "aicte_office" || roleStr === "admin") && (
+                    <button
+                      onClick={() => {
+                        afStore.verifyDocument(previewDoc.id, userId);
+                        notify(`Document "${previewDoc.fileName}" verified.`);
+                        setPreviewDoc({ ...previewDoc, verified: true });
+                        onRefresh();
+                      }}
+                      className="rounded bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs px-3.5 py-1.5 transition-colors"
+                    >
+                      ✓ Mark as Verified
+                    </button>
+                  )}
+                <button
+                  onClick={() => {
+                    notify(`Downloading copy of ${previewDoc.fileName}...`);
+                  }}
+                  className="rounded border border-[#D5DDE6] bg-white hover:bg-slate-50 text-[#172B40] font-medium text-xs px-3 py-1.5 transition-colors"
+                >
+                  ⬇ Download Copy
+                </button>
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="rounded bg-[#163B65] hover:bg-[#102F52] text-white font-semibold text-xs px-4 py-1.5 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1518,6 +1838,10 @@ function ApplicationsPage() {
   const userId = getDemoUserId(role);
   const roleStr = role as string | null;
   const canEdit = roleStr === "aicte_office" || roleStr === "admin" || roleStr === "institution";
+  const currentUser = getCurrentDemoUser();
+  const [currentInstId, setCurrentInstId] = useState<string>(
+    () => (currentUser as { institutionId?: string } | null)?.institutionId || "inst-1",
+  );
   const [search, setSearch] = useState("");
   const [filterStage, setFilterStage] = useState<AppStage | "">("");
   const [filterRegion, setFilterRegion] = useState("");
@@ -1532,12 +1856,27 @@ function ApplicationsPage() {
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
+  const handleSwitchInstitution = (newInstId: string) => {
+    setCurrentInstId(newInstId);
+    const inst = afStore.getInstitution(newInstId);
+    if (currentUser) {
+      const updated = {
+        ...currentUser,
+        id: newInstId,
+        institutionId: newInstId,
+        name: inst ? inst.name : currentUser.name,
+      };
+      localStorage.setItem("demoUser", JSON.stringify(updated));
+    }
+    setTick((t) => t + 1);
+  };
+
   const apps = useMemo(() => {
     return afStore.applications.filter((app) => {
       if (filterStage && app.currentStage !== filterStage) return false;
       if (filterRegion && app.region !== filterRegion) return false;
       if (filterType && app.appType !== filterType) return false;
-      if (roleStr === "institution" && app.institutionId !== "inst-1") return false;
+      if (roleStr === "institution" && app.institutionId !== currentInstId) return false;
       if (search) {
         const term = search.toLowerCase();
         const inst = afStore.getInstitution(app.institutionId);
@@ -1550,7 +1889,7 @@ function ApplicationsPage() {
       }
       return true;
     });
-  }, [search, filterStage, filterRegion, filterType, role, roleStr, tick]);
+  }, [search, filterStage, filterRegion, filterType, role, roleStr, currentInstId, tick]);
 
   const regions = Array.from(new Set(afStore.applications.map((a) => a.region)));
   const stats = afStore.getStats();
@@ -1591,6 +1930,53 @@ function ApplicationsPage() {
           </div>
         ))}
       </div>
+
+      {/* Individual Institution Portal Banner */}
+      {roleStr === "institution" && (
+        <div className="bg-gradient-to-r from-blue-50 to-slate-50 border border-blue-200 rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="h-10 w-10 rounded-lg bg-[#163B65] text-white flex items-center justify-center text-lg font-bold shadow-xs">
+              🏛
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold tracking-wider text-blue-700 bg-blue-100 px-2 py-0.2 rounded-full uppercase">
+                  Institutional Portal Access
+                </span>
+                <span className="text-[11px] text-[#5F6F82]">
+                  AICTE ID:{" "}
+                  <strong className="text-[#172B40] font-mono">
+                    {afStore.getInstitution(currentInstId)?.aicteId || "AICTE-2024-0001"}
+                  </strong>
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-[#163B65] mt-0.5">
+                {afStore.getInstitution(currentInstId)?.name || "Sri Institute of Technology"}
+              </h3>
+              <p className="text-[11px] text-[#5F6F82]">
+                Region: {afStore.getInstitution(currentInstId)?.state || "Karnataka"} · Showing{" "}
+                {apps.length} associated regulatory application(s)
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-md border border-blue-200 shadow-xs">
+            <label className="text-[11px] font-bold text-[#163B65] shrink-0">
+              Active Institution:
+            </label>
+            <select
+              value={currentInstId}
+              onChange={(e) => handleSwitchInstitution(e.target.value)}
+              className="rounded border border-[#CBD5E1] bg-white px-2.5 py-1 text-xs text-[#172B40] font-semibold focus:outline-none focus:ring-2 focus:ring-[#163B65]/20"
+            >
+              {afStore.institutions.map((inst) => (
+                <option key={inst.id} value={inst.id}>
+                  {inst.name} ({inst.aicteId} · {inst.state})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="bg-white rounded border border-[#E1E7ED] p-3 flex flex-wrap gap-2.5 items-center">

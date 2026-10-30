@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DEMO_USERS, getCurrentDemoUser } from "@/lib/supabase";
 import { useDemoRole } from "@/lib/demo-role-store";
+import { afStore } from "@/lib/approval-flow";
 import { useNavigate } from "@tanstack/react-router";
 import type { Role } from "@/lib/workflow";
 
@@ -63,17 +64,28 @@ function LoginPage() {
   const [, setRole] = useDemoRole();
   const navigate = useNavigate();
   const [loading, setLoading] = useState<string | null>(null);
+  const [selectedInstId, setSelectedInstId] = useState<string>("inst-1");
 
   useEffect(() => {
     localStorage.removeItem("approvalFlowStore");
     localStorage.removeItem("approvalFlowStore_v2");
     const existing = getCurrentDemoUser();
     if (existing) navigate({ to: "/demo/approvalflow/applications" });
-  }, []);
+  }, [navigate]);
 
   const handleLogin = (user: (typeof DEMO_USERS)[0]) => {
     setLoading(user.id);
-    localStorage.setItem("demoUser", JSON.stringify(user));
+    let userToStore = user;
+    if (user.role === "institution") {
+      const inst = afStore.getInstitution(selectedInstId) || afStore.institutions[0];
+      userToStore = {
+        ...user,
+        id: selectedInstId,
+        institutionId: selectedInstId,
+        name: inst ? inst.name : user.name,
+      };
+    }
+    localStorage.setItem("demoUser", JSON.stringify(userToStore));
     setRole(user.role as unknown as Role);
     setTimeout(() => {
       navigate({ to: "/demo/approvalflow/applications" });
@@ -174,6 +186,28 @@ function LoginPage() {
                           </span>
                         ))}
                       </div>
+
+                      {user.role === "institution" && (
+                        <div
+                          className="mt-3 pt-2.5 border-t border-blue-100 space-y-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <label className="text-[10px] font-bold text-[#163B65] uppercase tracking-wider block">
+                            Select Individual Institution Account:
+                          </label>
+                          <select
+                            value={selectedInstId}
+                            onChange={(e) => setSelectedInstId(e.target.value)}
+                            className="w-full rounded border border-blue-200 bg-[#F5F8FC] px-2 py-1 text-xs text-[#172B40] font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            {afStore.institutions.map((inst) => (
+                              <option key={inst.id} value={inst.id}>
+                                {inst.name} ({inst.aicteId} · {inst.state})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center self-center flex-shrink-0">
                       {isLoading ? (

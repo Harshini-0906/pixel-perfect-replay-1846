@@ -23,6 +23,7 @@ export interface DemoUser {
   email: string;
   name: string;
   role: "institution" | "aicte_office" | "admin";
+  institutionId?: string;
 }
 
 // Hard‑coded test users for demo mode – you can switch them via a simple UI.
@@ -30,8 +31,9 @@ export const DEMO_USERS: DemoUser[] = [
   {
     id: "inst-001",
     email: "institution@example.com",
-    name: "Demo Institution",
+    name: "Sri Institute of Technology",
     role: "institution",
+    institutionId: "inst-1",
   },
   {
     id: "aicte-001",

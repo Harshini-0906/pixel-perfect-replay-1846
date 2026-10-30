@@ -55,6 +55,10 @@ export interface Document {
   verified: boolean;
   ocrExtracted?: Record<string, string>;
   flags?: string[];
+  fileSize?: string;
+  uploadedAt?: string;
+  uploadedBy?: string;
+  fileData?: string;
 }
 
 export interface Task {
@@ -250,6 +254,20 @@ class Store {
       if (raw) {
         const parsed = JSON.parse(raw);
         Object.assign(this, parsed);
+        // Repair / backfill legacy applications in user's localStorage
+        if (Array.isArray(this.applications)) {
+          this.applications.forEach((app, i) => {
+            if (!app.workflowTemplate) {
+              app.workflowTemplate =
+                workflowTemplates[i % workflowTemplates.length] || "scrutinyEvc";
+            }
+            if (!app.stageEntered || typeof app.stageEntered !== "object") {
+              app.stageEntered = {
+                [app.currentStage]: app.submittedOn || new Date().toISOString(),
+              };
+            }
+          });
+        }
       }
     } catch {
       /* ignore */
@@ -463,7 +481,10 @@ class Store {
     const app = this.getApplication(appId);
     if (!app) throw new Error("Application not found");
     const from = app.currentStage;
-    // Verify template ordering
+    if (!app.workflowTemplate) {
+      app.workflowTemplate = "scrutinyEvc";
+    }
+    // Verify template ordering & transition rules
     const allowed = getAllowedNextStages(app);
     if (!allowed.includes(toStage)) {
       throw new Error(
@@ -540,6 +561,8 @@ class Store {
     fileName: string,
     userId: string,
     ocr?: Record<string, string>,
+    fileSize?: string,
+    fileData?: string,
   ) {
     const docEntry: Document = {
       id: `doc-${Date.now()}`,
@@ -547,14 +570,18 @@ class Store {
       type,
       fileName,
       verified: false,
+      fileSize: fileSize || "1.4 MB",
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: userId,
       ...(ocr ? { ocrExtracted: ocr } : {}),
+      ...(fileData ? { fileData } : {}),
     };
     this.documents.push(docEntry);
     this.auditLogs.push({
       id: `log-${Date.now()}`,
       appId,
       userId,
-      action: `Uploaded ${type}`,
+      action: `Uploaded ${type.replace(/_/g, " ")} (${fileName})`,
       timestamp: new Date().toISOString(),
     });
     this.persist();
@@ -755,16 +782,30 @@ export const getStagesPendencyStats = (apps: Application[]): StagePendencyStats[
 };
 
 /** Return the ordered stage list for a given workflow template */
-export function getTemplateStages(template: string): Stage[] {
-  return WORKFLOW_TEMPLATES[template] ?? [];
+export function getTemplateStages(template?: string): Stage[] {
+  if (template && WORKFLOW_TEMPLATES[template]) {
+    return WORKFLOW_TEMPLATES[template]!;
+  }
+  return WORKFLOW_TEMPLATES["scrutinyEvc"]!;
 }
 
 /** Compute allowed next stages for an application based on its workflow */
 export function getAllowedNextStages(app: Application): Stage[] {
-  const seq = getTemplateStages(app.workflowTemplate);
-  const idx = seq.indexOf(app.currentStage);
-  if (idx === -1) return [];
-  return seq.slice(idx + 1);
+  const current = app.currentStage;
+  const directAllowed = STAGE_TRANSITIONS[current] ?? [];
+  const template = app.workflowTemplate || "scrutinyEvc";
+
+  // Template-specific branching rules
+  if (template === "scrutinyOnly") {
+    // Under scrutinyOnly, EVC visit is skipped in favor of direct Recommendation or Deficiency
+    return directAllowed.filter((s) => s !== "EVC");
+  }
+
+  if (template === "evcOnly" && current === "Submitted") {
+    return ["EVC"];
+  }
+
+  return directAllowed;
 }
 
 export const getDemoUserId = (role: string | null) => {
