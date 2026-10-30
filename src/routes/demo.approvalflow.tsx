@@ -312,16 +312,31 @@ function NotificationCenter({
 
 function ApprovalFlowLayout() {
   const [role] = useDemoRole();
+  const roleStr = role as string | null;
+  const isInstitution = roleStr === "institution";
   const user = getCurrentDemoUser();
-  const [stats, setStats] = useState(() => afStore.getStats());
+  
+  const computeStats = () => {
+    const u = getCurrentDemoUser();
+    const instId = isInstitution
+      ? ((u as { institutionId?: string } | null)?.institutionId || "inst-1")
+      : undefined;
+    return afStore.getStats(instId);
+  };
+
+  const [stats, setStats] = useState(computeStats);
   const router = useRouterState();
   const currentPath = router.location.pathname;
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const unsub = storeEvents.subscribe(() => setStats(afStore.getStats()));
+    setStats(computeStats());
+  }, [roleStr, isInstitution]);
+
+  useEffect(() => {
+    const unsub = storeEvents.subscribe(() => setStats(computeStats()));
     return unsub;
-  }, []);
+  }, [isInstitution]);
 
   const handleLogout = async () => {
     await signOutDemoUser();
@@ -329,9 +344,13 @@ function ApprovalFlowLayout() {
   };
 
   // Role-based nav filtering (role is typed as Role | null from workflow.ts but actually holds demo strings)
-  const roleStr = role as string | null;
   const visibleNav = NAV_ITEMS.filter((n) => {
-    if (roleStr === "institution") return n.path === "/demo/approvalflow/applications";
+    if (roleStr === "institution") {
+      return (
+        n.path === "/demo/approvalflow/applications" ||
+        n.path === "/demo/approvalflow/compliance"
+      );
+    }
     return true;
   });
 
@@ -362,12 +381,20 @@ function ApprovalFlowLayout() {
       {/* Quick stats strip */}
       <div className="px-3 py-3 border-b border-white/10">
         <div className="grid grid-cols-2 gap-1.5">
-          {[
-            { label: "Pending", value: stats.pending, color: "text-amber-300" },
-            { label: "Overdue", value: stats.overdue, color: "text-red-400" },
-            { label: "Approved", value: stats.approved, color: "text-green-400" },
-            { label: "Total", value: stats.total, color: "text-white" },
-          ].map((s) => (
+          {(isInstitution
+            ? [
+                { label: "Pending", value: stats.pending, color: "text-amber-300" },
+                { label: "Action Needed", value: stats.overdue, color: "text-red-400" },
+                { label: "Approved", value: stats.approved, color: "text-green-400" },
+                { label: "My Apps", value: stats.total, color: "text-white" },
+              ]
+            : [
+                { label: "Pending", value: stats.pending, color: "text-amber-300" },
+                { label: "Overdue", value: stats.overdue, color: "text-red-400" },
+                { label: "Approved", value: stats.approved, color: "text-green-400" },
+                { label: "Total", value: stats.total, color: "text-white" },
+              ]
+          ).map((s) => (
             <div key={s.label} className="rounded bg-white/5 px-2 py-1.5 text-center">
               <p className={`text-sm font-bold ${s.color}`}>{s.value}</p>
               <p className="text-[10px] text-white/40">{s.label}</p>

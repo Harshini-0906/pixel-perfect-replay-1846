@@ -446,9 +446,11 @@ class Store {
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }
 
-  // Summary stats for dashboard
-  getStats() {
-    const apps = this.applications;
+  // Summary stats for dashboard (supports filtering by institution for institution login)
+  getStats(institutionId?: string) {
+    const apps = institutionId
+      ? this.applications.filter((a) => a.institutionId === institutionId)
+      : this.applications;
     return {
       total: apps.length,
       pending: apps.filter((a) => a.status === "Pending").length,

@@ -633,23 +633,38 @@ class PostApprovalStore {
   }
 
   // ── Statistics for Compliance Dashboard ─────────────────────────────────────
-  getComplianceStats() {
-    const totalUt = this.undertakings.length;
-    const pendingUt = this.undertakings.filter(
+  getComplianceStats(institutionId?: string) {
+    const utList = institutionId
+      ? this.undertakings.filter(
+          (u) =>
+            u.institutionId === institutionId ||
+            (institutionId === "inst-1" && u.institutionId === "inst-001"),
+        )
+      : this.undertakings;
+    const docList = institutionId
+      ? this.trackedDocs.filter(
+          (d) =>
+            d.institutionId === institutionId ||
+            (institutionId === "inst-1" && d.institutionId === "inst-001"),
+        )
+      : this.trackedDocs;
+
+    const totalUt = utList.length;
+    const pendingUt = utList.filter(
       (u) => u.status === "Pending" || u.status === "In Progress",
     ).length;
-    const overdueUt = this.undertakings.filter(
+    const overdueUt = utList.filter(
       (u) => u.status === "Overdue" || (daysUntil(u.dueDate) < 0 && u.status !== "Verified"),
     ).length;
-    const awaitingReviewUt = this.undertakings.filter(
+    const awaitingReviewUt = utList.filter(
       (u) => u.status === "Submitted" || u.status === "Under Review",
     ).length;
-    const verifiedUt = this.undertakings.filter((u) => u.status === "Verified").length;
+    const verifiedUt = utList.filter((u) => u.status === "Verified").length;
 
-    const totalDocs = this.trackedDocs.length;
-    const expiringSoonDocs = this.trackedDocs.filter((d) => d.status === "Expiring Soon").length;
-    const expiredDocs = this.trackedDocs.filter((d) => d.status === "Expired").length;
-    const renewalPendingDocs = this.trackedDocs.filter(
+    const totalDocs = docList.length;
+    const expiringSoonDocs = docList.filter((d) => d.status === "Expiring Soon").length;
+    const expiredDocs = docList.filter((d) => d.status === "Expired").length;
+    const renewalPendingDocs = docList.filter(
       (d) => d.status === "Renewal Submitted" || d.status === "Under Verification",
     ).length;
 

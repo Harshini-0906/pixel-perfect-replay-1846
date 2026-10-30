@@ -1868,6 +1868,7 @@ function ApplicationsPage() {
       };
       localStorage.setItem("demoUser", JSON.stringify(updated));
     }
+    storeEvents.emit();
     setTick((t) => t + 1);
   };
 
@@ -1892,41 +1893,80 @@ function ApplicationsPage() {
   }, [search, filterStage, filterRegion, filterType, role, roleStr, currentInstId, tick]);
 
   const regions = Array.from(new Set(afStore.applications.map((a) => a.region)));
-  const stats = afStore.getStats();
+  const stats = useMemo(() => {
+    return roleStr === "institution" ? afStore.getStats(currentInstId) : afStore.getStats();
+  }, [roleStr, currentInstId, tick]);
 
   return (
     <div className="space-y-5">
       {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          {
-            label: "Total Applications",
-            value: stats.total,
-            color: "text-[#163B65]",
-            border: "border-[#E1E7ED]",
-          },
-          {
-            label: "Pending",
-            value: stats.pending,
-            color: "text-amber-600",
-            border: "border-amber-200",
-          },
-          {
-            label: "Overdue",
-            value: stats.overdue,
-            color: "text-red-600",
-            border: "border-red-200",
-          },
-          {
-            label: "Approved",
-            value: stats.approved,
-            color: "text-green-700",
-            border: "border-green-200",
-          },
-        ].map((s) => (
+        {(roleStr === "institution"
+          ? [
+              {
+                label: "My Applications",
+                value: stats.total,
+                color: "text-[#163B65]",
+                border: "border-[#163B65]",
+                desc: "Submitted by your institution",
+              },
+              {
+                label: "In Review / Pending",
+                value: stats.pending,
+                color: "text-amber-600",
+                border: "border-amber-200",
+                desc: "Under AICTE scrutiny or EVC",
+              },
+              {
+                label: "Action Needed / Overdue",
+                value: stats.overdue,
+                color: "text-red-600",
+                border: "border-red-200",
+                desc: "Exceeded SLA or pending clarification",
+              },
+              {
+                label: "Approved Applications",
+                value: stats.approved,
+                color: "text-green-700",
+                border: "border-green-200",
+                desc: "Council approvals granted",
+              },
+            ]
+          : [
+              {
+                label: "Total Applications",
+                value: stats.total,
+                color: "text-[#163B65]",
+                border: "border-[#E1E7ED]",
+                desc: "All-India submissions",
+              },
+              {
+                label: "Pending",
+                value: stats.pending,
+                color: "text-amber-600",
+                border: "border-amber-200",
+                desc: "Across all regional offices",
+              },
+              {
+                label: "Overdue",
+                value: stats.overdue,
+                color: "text-red-600",
+                border: "border-red-200",
+                desc: "Exceeded statutory SLA",
+              },
+              {
+                label: "Approved",
+                value: stats.approved,
+                color: "text-green-700",
+                border: "border-green-200",
+                desc: "Council approvals granted",
+              },
+            ]
+        ).map((s) => (
           <div key={s.label} className={`stat-card border-l-4 ${s.border}`}>
             <p className={`kpi-number ${s.color}`}>{s.value}</p>
-            <p className="text-[11px] text-[#8290A0] mt-1">{s.label}</p>
+            <p className="text-[11px] font-semibold text-[#172B40] mt-1">{s.label}</p>
+            <p className="text-[10px] text-[#8290A0]">{s.desc}</p>
           </div>
         ))}
       </div>

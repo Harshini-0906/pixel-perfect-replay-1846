@@ -124,13 +124,19 @@ function ComplianceDashboard() {
     setTimeout(() => setToast(""), 3500);
   };
 
+  const activeInstId = (user as { institutionId?: string } | null)?.institutionId || "inst-1";
+
   // ── Scoped Undertakings & Tracked Docs (Role Isolation) ──────────────────────
   const undertakings = useMemo(() => {
     void tick;
     let list = postApprovalStore.getAllUndertakings();
     // Institution isolation rule: If signed in as institution, only see own institution records
     if (isInstitution) {
-      list = list.filter((u) => u.institutionId === "inst-1" || u.institutionId === "inst-001");
+      list = list.filter(
+        (u) =>
+          u.institutionId === activeInstId ||
+          (activeInstId === "inst-1" && (u.institutionId === "inst-1" || u.institutionId === "inst-001")),
+      );
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -142,13 +148,17 @@ function ComplianceDashboard() {
       );
     }
     return list;
-  }, [isInstitution, searchQuery, tick]);
+  }, [isInstitution, activeInstId, searchQuery, tick]);
 
   const trackedDocs = useMemo(() => {
     void tick;
     let list = postApprovalStore.getAllTrackedDocuments();
     if (isInstitution) {
-      list = list.filter((d) => d.institutionId === "inst-1" || d.institutionId === "inst-001");
+      list = list.filter(
+        (d) =>
+          d.institutionId === activeInstId ||
+          (activeInstId === "inst-1" && (d.institutionId === "inst-1" || d.institutionId === "inst-001")),
+      );
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -160,25 +170,33 @@ function ComplianceDashboard() {
       );
     }
     return list;
-  }, [isInstitution, searchQuery, tick]);
+  }, [isInstitution, activeInstId, searchQuery, tick]);
 
   const allTasks = useMemo(() => {
     void tick;
     let tasks = afStore.tasks.filter(
       (t) => t.type === "Deficiency" || t.type === "EVCVisit" || t.type === "Compliance",
     );
+    if (isInstitution) {
+      const instAppIds = new Set(
+        afStore.applications
+          .filter((a) => a.institutionId === activeInstId)
+          .map((a) => a.id),
+      );
+      tasks = tasks.filter((t) => instAppIds.has(t.appId));
+    }
     if (filterType) tasks = tasks.filter((t) => t.type === filterType);
     if (filterStatus === "open")
       return tasks.filter((t) => t.status !== "Resolved" && t.status !== "Closed");
     if (filterStatus === "resolved")
       return tasks.filter((t) => t.status === "Resolved" || t.status === "Closed");
     return tasks;
-  }, [filterStatus, filterType, tick]);
+  }, [isInstitution, activeInstId, filterStatus, filterType, tick]);
 
   const complianceStats = useMemo(() => {
     void tick;
-    return postApprovalStore.getComplianceStats();
-  }, [tick]);
+    return postApprovalStore.getComplianceStats(isInstitution ? activeInstId : undefined);
+  }, [isInstitution, activeInstId, tick]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleResolve = (taskId: string) => {
